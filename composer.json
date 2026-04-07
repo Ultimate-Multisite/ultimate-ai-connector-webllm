@@ -30,5 +30,27 @@
 	},
 	"scripts": {
 		"test": "vendor/bin/phpunit"
+	},
+	"archive": {
+		"exclude": [
+			".git",
+			".github",
+			".gitignore",
+			".distignore",
+			".idea",
+			".vscode",
+			".phpunit.result.cache",
+			".DS_Store",
+			"node_modules",
+			"src",
+			"tests",
+			"phpunit.xml.dist",
+			"phpcs.xml.dist",
+			"webpack.config.js",
+			"package.json",
+			"package-lock.json",
+			"composer.lock",
+			"TODO.md"
+		]
 	}
 }

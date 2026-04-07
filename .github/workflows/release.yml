@@ -1,0 +1,105 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  PLUGIN_SLUG: ultimate-ai-connector-webllm
+
+jobs:
+  build-and-release:
+    name: Build and Create Release
+    runs-on: ubuntu-latest
+    if: github.repository == 'Ultimate-Multisite/ultimate-ai-connector-webllm'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          IS_PRERELEASE=false
+          if [[ "$TAG_VERSION" =~ -(alpha|beta|rc|dev|preview) ]]; then
+            IS_PRERELEASE=true
+          fi
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_ENV
+
+          # Check plugin header matches tag
+          PLUGIN_VERSION=$(grep -oP '^\s*\*?\s*Version:\s*\K.*' ${PLUGIN_SLUG}.php | tr -d '[:space:]')
+          if [ "$PLUGIN_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Plugin header version ($PLUGIN_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+          # Check package.json matches tag
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::package.json version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+          # Check version constant matches tag
+          CONST_VERSION=$(grep -oP "define\(\s*'[A-Z_]+VERSION'\s*,\s*'\K[^']+" ${PLUGIN_SLUG}.php 2>/dev/null | head -1 || true)
+          if [ -n "$CONST_VERSION" ] && [ "$CONST_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version constant ($CONST_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+          # Stable releases must update readme.txt Stable tag and have a changelog entry.
+          # Pre-releases skip both checks.
+          if [ "$IS_PRERELEASE" = "false" ] && [ -f readme.txt ]; then
+            README_VERSION=$(grep -oP '^Stable tag:\s*\K.*' readme.txt | tr -d '[:space:]')
+            if [ "$README_VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::readme.txt Stable tag ($README_VERSION) does not match tag ($TAG_VERSION)"
+              exit 1
+            fi
+            if ! grep -qP "^=\s+\Q${TAG_VERSION}\E[\s=]" readme.txt; then
+              echo "::error::readme.txt has no changelog entry for version $TAG_VERSION"
+              exit 1
+            fi
+          fi
+
+          echo "All version checks passed: $TAG_VERSION (prerelease=$IS_PRERELEASE)"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, intl
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install PHP dependencies (production)
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build plugin (compiles JS + creates ${{ env.PLUGIN_SLUG }}.zip)
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_SLUG }}-zip
+          path: ${{ env.PLUGIN_SLUG }}.zip
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PLUGIN_SLUG }}.zip
+          generate_release_notes: true
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
