@@ -229,10 +229,36 @@ function WebLlmConnectorCard( { label, description } ) {
 	);
 }
 
-registerConnector( 'ultimate-ai-connector-webllm', {
+const SLUG = 'ultimate-ai-connector-webllm';
+const CONFIG = {
 	label: __( 'WebLLM (Browser GPU)' ),
 	description: __(
 		'Run LLM inference entirely in the user\'s browser via WebGPU + WebLLM. A persistent worker tab provides the GPU; the WordPress site brokers requests so any logged-in device can use it.'
 	),
 	render: WebLlmConnectorCard,
-} );
+};
+
+// WP core's `routes/connectors-home/content.js` runs
+// `registerDefaultConnectors()` which iterates every AI provider in the PHP
+// registry and re-registers each one with the generic ApiKeyConnector
+// render function. Whichever script runs *last* wins because the store
+// reducer spreads new config over the existing entry. Plugin script modules
+// can fire either before or after content.js depending on import-graph
+// resolution order, so we re-assert our registration on multiple ticks to
+// always end up last. The selectors that would let us read the store are
+// private, so we just call registerConnector() unconditionally — it's a
+// simple state replace and idempotent for our render reference.
+function registerOurs() {
+	registerConnector( SLUG, CONFIG );
+}
+
+registerOurs();
+// Microtask: covers the common case where the WP default-register runs
+// synchronously right after our script.
+Promise.resolve().then( registerOurs );
+// Macrotask: covers the case where it runs in a later script-module tick.
+setTimeout( registerOurs, 0 );
+// Last-resort retries for whatever absurd race we haven't thought of.
+setTimeout( registerOurs, 50 );
+setTimeout( registerOurs, 250 );
+setTimeout( registerOurs, 1000 );
