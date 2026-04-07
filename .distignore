@@ -1,6 +1,7 @@
 .git
 .github
 .gitignore
+.gitattributes
 .distignore
 .idea
 .vscode
@@ -16,3 +17,8 @@ package.json
 package-lock.json
 composer.lock
 TODO.md
+AGENTS.md
+todo
+.agents
+.aidevops.json
+.beads
