@@ -118,3 +118,9 @@ The `/jobs/{id}/result` handler reads `$request->get_url_params()['id']` directl
 - No streaming (broker buffers full completion; SSE would require a loopback-path upgrade)
 - VLM (vision-language) models not yet supported — worker normalises content-parts arrays to plain strings
 - Inference speed on integrated GPUs is single-digit tokens/sec; fine for async tasks, slow for chat
+
+## Task Tracking
+
+- `TODO.md` at repo root is the source of truth for tasks (aidevops convention).
+- [Beads](https://github.com/steveyegge/beads) is enabled as a local dependency-graph view. Sync with `~/.aidevops/agents/scripts/beads-sync-helper.sh push`. The `.beads/` directory is local state only and is gitignored — `bd init` must be re-run after a fresh clone.
+- Do not use `bd` as the primary tracker or follow the `bd prime` / `bd dolt push` workflow. Beads is derived from `TODO.md`, not the other way round.
