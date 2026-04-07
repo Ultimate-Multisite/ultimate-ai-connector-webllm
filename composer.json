@@ -1,0 +1,34 @@
+{
+	"name": "ultimate-multisite/ultimate-ai-connector-webllm",
+	"description": "Registers a WordPress AI Client provider that runs LLM inference entirely in the user's browser via WebGPU + WebLLM, using the same WordPress site as a request broker so any logged-in device can use the desktop GPU.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"authors": [
+		{
+			"name": "Ultimate Multisite Community",
+			"homepage": "https://ultimatemultisite.com"
+		}
+	],
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.6 || ^10.0",
+		"yoast/phpunit-polyfills": "^3.0"
+	},
+	"autoload": {
+		"classmap": [
+			"inc/"
+		]
+	},
+	"config": {
+		"platform": {
+			"php": "8.2.0"
+		},
+		"preferred-install": "dist",
+		"sort-packages": true
+	},
+	"scripts": {
+		"test": "vendor/bin/phpunit"
+	}
+}
