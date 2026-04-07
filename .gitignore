@@ -8,3 +8,7 @@
 .vscode/
 .phpunit.result.cache
 /composer.lock
+
+# Local-only tooling state
+.beads/
+.agents/loop-state/

@@ -7,7 +7,7 @@
     "code_quality": true,
     "time_tracking": true,
     "database": false,
-    "beads": false,
+    "beads": true,
     "sops": false,
     "security": true
   },
@@ -20,7 +20,9 @@
     "enabled": false
   },
   "beads": {
-    "enabled": false
+    "enabled": true,
+    "sync_on_commit": false,
+    "auto_ready_check": true
   },
   "sops": {
     "enabled": false,
