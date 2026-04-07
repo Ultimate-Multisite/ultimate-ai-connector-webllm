@@ -4,7 +4,7 @@
  * Description: Registers an AI Client provider that runs LLM inference entirely in the user's browser via WebGPU + WebLLM. A persistent worker tab acts as the GPU; the WordPress site brokers requests so any logged-in device (phone, tablet, second laptop) can use it.
  * Requires at least: 7.0
  * Requires PHP: 7.4
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Ultimate Multisite Community
  * Author URI: https://ultimatemultisite.com
  * License: GPL-2.0-or-later
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	return;
 }
 
-define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION', '1.0.0' );
+define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION', '1.0.1' );
 define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_FILE', __FILE__ );
 define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_DIR', __DIR__ );
 

@@ -235,19 +235,22 @@ function rest_list_models( \WP_REST_Request $request ) {
 }
 
 /**
- * GET /jobs/next — worker long-poll. Briefly waits for a job to appear.
+ * GET /jobs/next — short-poll. Briefly waits for a job, then returns 204
+ * so the worker can re-poll. Each request holds a PHP-FPM worker for at
+ * most ~3 seconds, which is critical on installs with low `pm.max_children`
+ * (typical default is 5). The worker JS reconnects immediately on 204, so
+ * effective latency is ≪ 1 second when a job is enqueued.
  */
 function rest_jobs_next( \WP_REST_Request $request ) {
 	Job_Queue::mark_worker_seen();
 
-	// Up to ~25 seconds of polling per request to keep the worker tab efficient.
-	$deadline = microtime( true ) + 25.0;
+	$deadline = microtime( true ) + 3.0;
 	while ( microtime( true ) < $deadline ) {
 		$job = Job_Queue::claim_next();
 		if ( $job ) {
 			return rest_ensure_response( $job );
 		}
-		usleep( 300000 );
+		usleep( 200000 ); // 200 ms.
 	}
 
 	return new \WP_REST_Response( null, 204 );

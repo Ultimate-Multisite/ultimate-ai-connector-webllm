@@ -6,12 +6,24 @@
  * WebGPU, and posts the result back. Other devices on the same WP install
  * make requests against the broker, which routes them through this tab.
  *
+ * `@mlc-ai/web-llm` is loaded via dynamic import so the ~5 MB MLCEngine
+ * bundle is split into its own chunk and only fetched when the user opens
+ * this page — the page-shell `worker.js` becomes a few KB instead of
+ * blocking the entire wp-admin until the LLM library finishes downloading.
+ *
  * Built with @wordpress/scripts → build/worker.js, enqueued by inc/admin.php.
  *
  * @package UltimateAiConnectorWebLlm
  */
 
-import { CreateMLCEngine, prebuiltAppConfig } from '@mlc-ai/web-llm';
+// Lazy module handle, populated by ensureWebLlmLoaded() on first use.
+let webllm = null;
+async function ensureWebLlmLoaded() {
+	if ( ! webllm ) {
+		webllm = await import( /* webpackChunkName: "mlc-ai-web-llm" */ '@mlc-ai/web-llm' );
+	}
+	return webllm;
+}
 
 const { createElement: h, useState, useEffect, useRef, useCallback, render } = wp.element;
 const { Button, SelectControl, Spinner, Notice, Card, CardBody, __experimentalVStack: VStack, __experimentalHStack: HStack, ProgressBar } = wp.components;
@@ -131,9 +143,32 @@ async function autoPickModel( list ) {
 }
 
 function App() {
-	const modelList = ( prebuiltAppConfig && Array.isArray( prebuiltAppConfig.model_list ) ) ? prebuiltAppConfig.model_list : [];
+	const [ modelList, setModelList ] = useState( [] );
+	const [ libLoading, setLibLoading ] = useState( true );
+	const [ libError, setLibError ] = useState( null );
 	const [ modelId, setModelId ] = useState( '' );
 	const [ engine, setEngine ] = useState( null );
+
+	// Kick off the dynamic import on mount. Until it resolves the user sees
+	// "Loading WebLLM library…" instead of an empty screen.
+	useEffect( () => {
+		let cancelled = false;
+		ensureWebLlmLoaded()
+			.then( ( mod ) => {
+				if ( cancelled ) return;
+				const list = ( mod.prebuiltAppConfig && Array.isArray( mod.prebuiltAppConfig.model_list ) )
+					? mod.prebuiltAppConfig.model_list
+					: [];
+				setModelList( list );
+				setLibLoading( false );
+			} )
+			.catch( ( e ) => {
+				if ( cancelled ) return;
+				setLibError( ( e && e.message ) || String( e ) );
+				setLibLoading( false );
+			} );
+		return () => { cancelled = true; };
+	}, [] );
 	const [ log, setLog ] = useState( [] );
 	const pushLog = useCallback( ( line ) => {
 		const ts = new Date().toLocaleTimeString();
@@ -142,14 +177,15 @@ function App() {
 		console.log( '[webllm-worker]', line );
 	}, [] );
 
-	// Resolve the default model asynchronously (needs WebGPU adapter probe).
+	// Resolve the default model once the catalog is available.
 	useEffect( () => {
+		if ( modelList.length === 0 ) return;
 		let cancelled = false;
 		resolveDefaultModel( modelList ).then( ( id ) => {
 			if ( ! cancelled && id ) setModelId( id );
 		} );
 		return () => { cancelled = true; };
-	}, [] );
+	}, [ modelList ] );
 	const [ loadProgress, setLoadProgress ] = useState( null );
 	const [ loadText, setLoadText ] = useState( '' );
 	const [ status, setStatus ] = useState( 'idle' );
@@ -176,8 +212,9 @@ function App() {
 		} )();
 	}, [] );
 
-	// Register model list with the broker once on mount.
+	// Register model list with the broker once the catalog is available.
 	useEffect( () => {
+		if ( modelList.length === 0 ) return;
 		api( '/register-worker', {
 			method: 'POST',
 			body: JSON.stringify( {
@@ -189,7 +226,7 @@ function App() {
 				} ) ),
 			} ),
 		} ).catch( () => {} );
-	}, [] );
+	}, [ modelList ] );
 
 	// Unconditional 20s heartbeat. Sends the currently-loaded model id so the
 	// broker's active_model transient always reflects real state — even while
@@ -214,12 +251,14 @@ function App() {
 		setLoadProgress( 0 );
 		setLoadText( __( 'Initializing…', 'ultimate-ai-connector-webllm' ) );
 		try {
+			const mod = await ensureWebLlmLoaded();
+
 			// Override the model's baked-in context_window_size. MLC's
 			// prebuilt configs cap most chat models at 4096 tokens to keep
 			// KV cache memory low; we expose a setting so users with bigger
 			// GPUs can fit longer system prompts (e.g. AI agent tool defs).
 			// Each doubling of context roughly doubles VRAM for the KV cache.
-			const appConfig = JSON.parse( JSON.stringify( prebuiltAppConfig ) );
+			const appConfig = JSON.parse( JSON.stringify( mod.prebuiltAppConfig ) );
 			const entry     = appConfig.model_list.find( ( m ) => ( m.model_id || m.id ) === modelId );
 			if ( entry ) {
 				entry.overrides = {
@@ -229,7 +268,7 @@ function App() {
 				pushLog( `context_window_size override → ${ CFG.contextWindow }` );
 			}
 
-			const eng = await CreateMLCEngine( modelId, {
+			const eng = await mod.CreateMLCEngine( modelId, {
 				appConfig,
 				initProgressCallback: ( p ) => {
 					setLoadProgress( typeof p.progress === 'number' ? Math.round( p.progress * 100 ) : null );
@@ -387,6 +426,27 @@ function App() {
 		label: ( m.model_id || m.id ) + ( m.vram_required_MB ? ` (~${ Math.round( m.vram_required_MB ) } MB)` : '' ),
 		value: m.model_id || m.id,
 	} ) );
+
+	if ( libLoading ) {
+		return h( Card, null,
+			h( CardBody, null,
+				h( HStack, { spacing: 3 },
+					h( Spinner, null ),
+					h( 'span', null, __( 'Loading WebLLM library… (≈5 MB, downloaded once)', 'ultimate-ai-connector-webllm' ) )
+				)
+			)
+		);
+	}
+
+	if ( libError ) {
+		return h( Card, null,
+			h( CardBody, null,
+				h( Notice, { status: 'error', isDismissible: false },
+					__( 'Failed to load WebLLM library:', 'ultimate-ai-connector-webllm' ) + ' ' + libError
+				)
+			)
+		);
+	}
 
 	return h( Card, null,
 		h( CardBody, null,
