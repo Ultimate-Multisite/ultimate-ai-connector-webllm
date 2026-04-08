@@ -24,6 +24,7 @@ module.exports = {
 		worker: path.resolve( __dirname, 'src', 'worker.jsx' ),
 		'shared-worker': path.resolve( __dirname, 'src', 'shared-worker.js' ),
 		'floating-widget': path.resolve( __dirname, 'src', 'floating-widget.jsx' ),
+		'widget-bootstrap': path.resolve( __dirname, 'src', 'widget-bootstrap.js' ),
 	},
 	output: {
 		path: path.resolve( __dirname, 'build' ),

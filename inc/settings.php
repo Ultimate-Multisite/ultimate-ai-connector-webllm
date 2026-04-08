@@ -60,6 +60,59 @@ function register_settings(): void {
 			'show_in_rest'      => true,
 		]
 	);
+
+	register_setting(
+		'ultimate_ai_connector_webllm',
+		'webllm_runtime_mode',
+		[
+			'type'              => 'string',
+			'sanitize_callback' => static function ( $value ): string {
+				$allowed = [ 'auto', 'shared-worker', 'dedicated-tab', 'disabled' ];
+				return in_array( (string) $value, $allowed, true ) ? (string) $value : 'auto';
+			},
+			'default'           => 'auto',
+			'show_in_rest'      => true,
+		]
+	);
+
+	register_setting(
+		'ultimate_ai_connector_webllm',
+		'webllm_widget_enabled',
+		[
+			'type'              => 'boolean',
+			'sanitize_callback' => static function ( $v ): bool {
+				return (bool) $v;
+			},
+			'default'           => true,
+			'show_in_rest'      => true,
+		]
+	);
+
+	register_setting(
+		'ultimate_ai_connector_webllm',
+		'webllm_widget_on_frontend',
+		[
+			'type'              => 'boolean',
+			'sanitize_callback' => static function ( $v ): bool {
+				return (bool) $v;
+			},
+			'default'           => false,
+			'show_in_rest'      => true,
+		]
+	);
+
+	register_setting(
+		'ultimate_ai_connector_webllm',
+		'webllm_widget_autostart',
+		[
+			'type'              => 'boolean',
+			'sanitize_callback' => static function ( $v ): bool {
+				return (bool) $v;
+			},
+			'default'           => false,
+			'show_in_rest'      => true,
+		]
+	);
 }
 
 /**
