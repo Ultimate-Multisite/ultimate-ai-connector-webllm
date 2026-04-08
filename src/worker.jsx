@@ -267,6 +267,11 @@ function App() {
 				};
 				pushLog( `context_window_size override → ${ CFG.contextWindow }` );
 			}
+			// Force IndexedDB cache: HuggingFace now redirects shards to the
+			// xet CDN, and `Cache.add()` rejects redirected cross-origin
+			// responses. IndexedDB-backed caching uses plain fetch() and
+			// works with the redirect.
+			appConfig.useIndexedDBCache = true;
 
 			const eng = await mod.CreateMLCEngine( modelId, {
 				appConfig,

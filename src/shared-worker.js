@@ -210,8 +210,15 @@ async function ensureEngine() {
 	if ( engine ) {
 		return engine;
 	}
+	// HuggingFace now redirects model shards to their xet CDN
+	// (cas-bridge.xethub.hf.co). The browser Cache API's `cache.add()`
+	// rejects redirected cross-origin responses with a NetworkError, so
+	// WebLLM's default Cache-backed loader fails on every shard. Forcing
+	// the IndexedDB-backed cache bypasses Cache.add entirely — weights
+	// are fetched with plain fetch() and stored as blobs in IndexedDB.
+	const appConfig = { ...prebuiltAppConfig, useIndexedDBCache: true };
 	engine = new MLCEngine( {
-		appConfig: prebuiltAppConfig,
+		appConfig,
 		initProgressCallback: ( report ) => {
 			setState( 'loading', { progress: report } );
 		},
