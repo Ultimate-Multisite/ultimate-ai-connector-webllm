@@ -25,6 +25,7 @@ module.exports = {
 		'shared-worker': path.resolve( __dirname, 'src', 'shared-worker.js' ),
 		'floating-widget': path.resolve( __dirname, 'src', 'floating-widget.jsx' ),
 		'widget-bootstrap': path.resolve( __dirname, 'src', 'widget-bootstrap.js' ),
+		'apifetch-middleware': path.resolve( __dirname, 'src', 'apifetch-middleware.js' ),
 	},
 	output: {
 		path: path.resolve( __dirname, 'build' ),
