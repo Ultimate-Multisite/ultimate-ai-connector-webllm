@@ -58,24 +58,18 @@ Compatible with [todo-md](https://github.com/todo-md/todo-md), [todomd](https://
 ## Backlog
 
 - [ ] t004 SharedWorker runtime mode for WebLLM connector @themarcusquinn #feature #enhancement #plan ~30h risk:med logged:2026-04-07 ref:GH#4 plan:p001 status:blocked → [todo/PLANS.md#p001](todo/PLANS.md)
-- [ ] t005 Hook WebLLM into wpai_preferred_text_models filter @themarcusquinn #bugfix #auto-dispatch ~30m risk:low logged:2026-04-07 ref:GH#5 tier:simple → [todo/tasks/t005-brief.md](todo/tasks/t005-brief.md)
+- [x] t005 Hook WebLLM into wpai_preferred_text_models filter @themarcusquinn #bugfix #auto-dispatch ~30m risk:low logged:2026-04-07 ref:GH#5 tier:simple pr:#14 verified:2026-04-08 → [todo/tasks/t005-brief.md](todo/tasks/t005-brief.md)
 - [x] t006 Phase 2 — SharedWorker handler + MLCEngine wrapper @themarcusquinn #feature #auto-dispatch ~5h risk:med logged:2026-04-07 ref:GH#6 tier:standard parent:t004 pr:#15 verified:2026-04-08 → [todo/tasks/t006-brief.md](todo/tasks/t006-brief.md)
-- [ ] t007 Phase 3 — Floating widget UI + state machine @themarcusquinn #feature #auto-dispatch ~7h risk:med logged:2026-04-07 ref:GH#7 tier:standard parent:t004 started:2026-04-08T00:01Z assignee:claude-opus-4-6 → [todo/tasks/t007-brief.md](todo/tasks/t007-brief.md)
-- [ ] t008 Phase 4 — Bootstrap, injector, capability detection @themarcusquinn #feature #auto-dispatch ~3h risk:low logged:2026-04-07 ref:GH#8 tier:standard parent:t004 blocked-by:t007 → [todo/tasks/t008-brief.md](todo/tasks/t008-brief.md)
-- [ ] t009 Phase 5 — Settings + connector card UI update @themarcusquinn #feature #auto-dispatch ~3h risk:low logged:2026-04-07 ref:GH#9 tier:standard parent:t004 blocked-by:t008 → [todo/tasks/t009-brief.md](todo/tasks/t009-brief.md)
-- [ ] t010 Phase 6 — apiFetch middleware integration @themarcusquinn #feature #auto-dispatch ~5h risk:med logged:2026-04-07 ref:GH#10 tier:standard parent:t004 blocked-by:t007 → [todo/tasks/t010-brief.md](todo/tasks/t010-brief.md)
-- [ ] t011 Phase 7 — Cross-browser testing + dedicated-tab fallback @themarcusquinn #testing ~4h risk:med logged:2026-04-07 ref:GH#11 tier:standard parent:t004 blocked-by:t006,t007,t008,t009,t010 human-only → [todo/tasks/t011-brief.md](todo/tasks/t011-brief.md)
+- [x] t007 Phase 3 — Floating widget UI + state machine @themarcusquinn #feature #auto-dispatch ~7h risk:med logged:2026-04-07 ref:GH#7 tier:standard parent:t004 pr:#16 verified:2026-04-08 → [todo/tasks/t007-brief.md](todo/tasks/t007-brief.md)
+- [x] t008 Phase 4 — Bootstrap, injector, capability detection @themarcusquinn #feature #auto-dispatch ~3h risk:low logged:2026-04-07 ref:GH#8 tier:standard parent:t004 pr:#17 verified:2026-04-08 → [todo/tasks/t008-brief.md](todo/tasks/t008-brief.md)
+- [x] t009 Phase 5 — Settings + connector card UI update @themarcusquinn #feature #auto-dispatch ~3h risk:low logged:2026-04-07 ref:GH#9 tier:standard parent:t004 pr:#17 verified:2026-04-08 → [todo/tasks/t009-brief.md](todo/tasks/t009-brief.md)
+- [x] t010 Phase 6 — apiFetch middleware integration @themarcusquinn #feature #auto-dispatch ~5h risk:med logged:2026-04-07 ref:GH#10 tier:standard parent:t004 pr:#18 verified:2026-04-08 → [todo/tasks/t010-brief.md](todo/tasks/t010-brief.md)
+- [ ] t011 Phase 7 — Cross-browser testing + dedicated-tab fallback @themarcusquinn #testing ~4h risk:med logged:2026-04-07 ref:GH#11 tier:standard parent:t004 human-only → [todo/tasks/t011-brief.md](todo/tasks/t011-brief.md)
 - [ ] t012 Phase 8 — Docs, .distignore, readme updates @themarcusquinn #docs #auto-dispatch ~2h risk:low logged:2026-04-07 ref:GH#12 tier:simple parent:t004 blocked-by:t011 → [todo/tasks/t012-brief.md](todo/tasks/t012-brief.md)
 
-<!--TOON:backlog[9]{id,desc,owner,tags,est,risk,logged,status,parent,blocked_by}:
+<!--TOON:backlog[3]{id,desc,owner,tags,est,risk,logged,status,parent,blocked_by}:
 t004,SharedWorker runtime mode for WebLLM connector,@themarcusquinn,feature/enhancement/plan,30h,med,2026-04-07,blocked,,
-t005,Hook WebLLM into wpai_preferred_text_models filter,@themarcusquinn,bugfix/auto-dispatch,30m,low,2026-04-07,available,,
-t006,Phase 2 — SharedWorker handler + MLCEngine wrapper,@themarcusquinn,feature/auto-dispatch,5h,med,2026-04-07,available,t004,
-t007,Phase 3 — Floating widget UI + state machine,@themarcusquinn,feature/auto-dispatch,7h,med,2026-04-07,blocked,t004,t006
-t008,Phase 4 — Bootstrap injector capability detection,@themarcusquinn,feature/auto-dispatch,3h,low,2026-04-07,blocked,t004,t007
-t009,Phase 5 — Settings + connector card UI update,@themarcusquinn,feature/auto-dispatch,3h,low,2026-04-07,blocked,t004,t008
-t010,Phase 6 — apiFetch middleware integration,@themarcusquinn,feature/auto-dispatch,5h,med,2026-04-07,blocked,t004,t007
-t011,Phase 7 — Cross-browser testing + dedicated-tab fallback,@themarcusquinn,testing,4h,med,2026-04-07,blocked,t004,"t006,t007,t008,t009,t010"
+t011,Phase 7 — Cross-browser testing + dedicated-tab fallback,@themarcusquinn,testing,4h,med,2026-04-07,available,t004,
 t012,Phase 8 — Docs distignore readme updates,@themarcusquinn,docs/auto-dispatch,2h,low,2026-04-07,blocked,t004,t011
 -->
 
@@ -93,7 +87,13 @@ t012,Phase 8 — Docs distignore readme updates,@themarcusquinn,docs/auto-dispat
 
 ## Done
 
-<!--TOON:done[0]{id,desc,owner,tags,est,actual,logged,started,completed,status}:
+<!--TOON:done[6]{id,desc,owner,tags,est,actual,logged,started,completed,status}:
+t005,Hook WebLLM into wpai_preferred_text_models filter,@themarcusquinn,bugfix/auto-dispatch,30m,,2026-04-07,,2026-04-08,done
+t006,Phase 2 — SharedWorker handler + MLCEngine wrapper,@themarcusquinn,feature/auto-dispatch,5h,,2026-04-07,,2026-04-08,done
+t007,Phase 3 — Floating widget UI + state machine,@themarcusquinn,feature/auto-dispatch,7h,,2026-04-07,,2026-04-08,done
+t008,Phase 4 — Bootstrap injector capability detection,@themarcusquinn,feature/auto-dispatch,3h,,2026-04-07,,2026-04-08,done
+t009,Phase 5 — Settings + connector card UI update,@themarcusquinn,feature/auto-dispatch,3h,,2026-04-07,,2026-04-08,done
+t010,Phase 6 — apiFetch middleware integration,@themarcusquinn,feature/auto-dispatch,5h,,2026-04-07,,2026-04-08,done
 -->
 
 ## Declined
@@ -112,5 +112,5 @@ t012,Phase 8 — Docs distignore readme updates,@themarcusquinn,docs/auto-dispat
 <!--/TOON:subtasks-->
 
 <!--TOON:summary{total,ready,pending,in_progress,in_review,done,declined,total_est,total_actual}:
-9,2,7,0,0,0,0,59h30m,
+9,1,2,0,0,6,0,59h30m,
 -->
