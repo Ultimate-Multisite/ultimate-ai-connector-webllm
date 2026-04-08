@@ -52,9 +52,33 @@ function WebLlmConnectorCard( { label, description } ) {
 	const [ timeout, setTimeoutVal ] = useState( 180 );
 	const [ allowRemote, setAllowRemote ] = useState( false );
 	const [ contextWindow, setContextWindow ] = useState( 8192 );
+	const [ runtimeMode, setRuntimeMode ] = useState( 'auto' );
+	const [ widgetEnabled, setWidgetEnabled ] = useState( true );
+	const [ widgetOnFrontend, setWidgetOnFrontend ] = useState( false );
+	const [ widgetAutostart, setWidgetAutostart ] = useState( false );
 	const [ models, setModels ] = useState( [] );
 	const [ workerOnline, setWorkerOnline ] = useState( false );
 	const [ saveError, setSaveError ] = useState( null );
+
+	const sharedWorkerAvailable =
+		typeof SharedWorker !== 'undefined' &&
+		typeof navigator !== 'undefined' &&
+		'gpu' in navigator;
+
+	const effectiveRuntime =
+		runtimeMode === 'auto'
+			? sharedWorkerAvailable
+				? __( 'Shared worker (auto)', 'ultimate-ai-connector-webllm' )
+				: __( 'Dedicated tab fallback (auto)', 'ultimate-ai-connector-webllm' )
+			: runtimeMode === 'shared-worker'
+				? __( 'Shared worker (forced)', 'ultimate-ai-connector-webllm' )
+				: runtimeMode === 'dedicated-tab'
+					? __( 'Dedicated tab (forced)', 'ultimate-ai-connector-webllm' )
+					: __( 'Disabled', 'ultimate-ai-connector-webllm' );
+
+	const showOpenWorkerButton =
+		runtimeMode === 'dedicated-tab' ||
+		( runtimeMode === 'auto' && ! sharedWorkerAvailable );
 
 	const refreshStatus = useCallback( async () => {
 		try {
@@ -66,12 +90,16 @@ function WebLlmConnectorCard( { label, description } ) {
 	const loadAll = useCallback( async () => {
 		try {
 			const settings = await apiFetch( {
-				path: '/wp/v2/settings?_fields=webllm_default_model,webllm_request_timeout,webllm_allow_remote_clients,webllm_context_window',
+				path: '/wp/v2/settings?_fields=webllm_default_model,webllm_request_timeout,webllm_allow_remote_clients,webllm_context_window,webllm_runtime_mode,webllm_widget_enabled,webllm_widget_on_frontend,webllm_widget_autostart',
 			} );
 			setDefaultModel( settings.webllm_default_model || '' );
 			setTimeoutVal( settings.webllm_request_timeout ?? 180 );
 			setAllowRemote( !! settings.webllm_allow_remote_clients );
 			setContextWindow( settings.webllm_context_window ?? 8192 );
+			setRuntimeMode( settings.webllm_runtime_mode || 'auto' );
+			setWidgetEnabled( settings.webllm_widget_enabled ?? true );
+			setWidgetOnFrontend( !! settings.webllm_widget_on_frontend );
+			setWidgetAutostart( !! settings.webllm_widget_autostart );
 		} catch {}
 		try {
 			const m = await apiFetch( { path: '/webllm/v1/models' } );
@@ -101,6 +129,10 @@ function WebLlmConnectorCard( { label, description } ) {
 					webllm_request_timeout: parseInt( timeout, 10 ) || 180,
 					webllm_allow_remote_clients: allowRemote,
 					webllm_context_window: parseInt( contextWindow, 10 ) || 8192,
+					webllm_runtime_mode: runtimeMode,
+					webllm_widget_enabled: widgetEnabled,
+					webllm_widget_on_frontend: widgetOnFrontend,
+					webllm_widget_autostart: widgetAutostart,
 				},
 			} );
 			setIsExpanded( false );
@@ -147,11 +179,74 @@ function WebLlmConnectorCard( { label, description } ) {
 				) }
 			</div>
 
-			<HStack>
-				<Button variant="primary" onClick={ openWorker } __next40pxDefaultSize>
-					{ __( 'Open worker tab', 'ultimate-ai-connector-webllm' ) }
-				</Button>
-			</HStack>
+			<VStack spacing={ 3 }>
+				<SelectControl
+					label={ __( 'Runtime mode', 'ultimate-ai-connector-webllm' ) }
+					value={ runtimeMode }
+					options={ [
+						{ label: __( 'Auto (shared worker if supported)', 'ultimate-ai-connector-webllm' ), value: 'auto' },
+						{ label: __( 'Shared worker only', 'ultimate-ai-connector-webllm' ), value: 'shared-worker' },
+						{ label: __( 'Dedicated tab only', 'ultimate-ai-connector-webllm' ), value: 'dedicated-tab' },
+						{ label: __( 'Disabled', 'ultimate-ai-connector-webllm' ), value: 'disabled' },
+					] }
+					onChange={ setRuntimeMode }
+					disabled={ isSaving }
+					help={ __(
+						'Auto detects SharedWorker + WebGPU support and falls back to a dedicated tab on older browsers.',
+						'ultimate-ai-connector-webllm'
+					) }
+					__nextHasNoMarginBottom
+					__next40pxDefaultSize
+				/>
+
+				<ToggleControl
+					label={ __( 'Enable floating widget', 'ultimate-ai-connector-webllm' ) }
+					checked={ widgetEnabled }
+					onChange={ setWidgetEnabled }
+					help={ __(
+						'Shows a small status icon in the corner of every admin page.',
+						'ultimate-ai-connector-webllm'
+					) }
+					__nextHasNoMarginBottom
+				/>
+
+				<ToggleControl
+					label={ __( 'Also show widget on front-end pages', 'ultimate-ai-connector-webllm' ) }
+					checked={ widgetOnFrontend }
+					onChange={ setWidgetOnFrontend }
+					disabled={ ! widgetEnabled }
+					help={ __(
+						'Only renders for logged-in users with permission to edit posts.',
+						'ultimate-ai-connector-webllm'
+					) }
+					__nextHasNoMarginBottom
+				/>
+
+				<ToggleControl
+					label={ __( 'Auto-start model on page load', 'ultimate-ai-connector-webllm' ) }
+					checked={ widgetAutostart }
+					onChange={ setWidgetAutostart }
+					disabled={ ! widgetEnabled }
+					help={ __(
+						'Uses GPU memory continuously. Leave off to load on demand when an AI feature is triggered.',
+						'ultimate-ai-connector-webllm'
+					) }
+					__nextHasNoMarginBottom
+				/>
+
+				<p style={ { fontSize: 13, color: '#444', margin: 0 } }>
+					<strong>{ __( 'Active runtime:', 'ultimate-ai-connector-webllm' ) }</strong>{ ' ' }
+					{ effectiveRuntime }
+				</p>
+
+				{ showOpenWorkerButton && (
+					<HStack>
+						<Button variant="secondary" onClick={ openWorker } __next40pxDefaultSize>
+							{ __( 'Open worker tab (fallback mode)', 'ultimate-ai-connector-webllm' ) }
+						</Button>
+					</HStack>
+				) }
+			</VStack>
 
 			{ models.length === 0 ? (
 				<p style={ { fontSize: 13, color: '#666' } }>

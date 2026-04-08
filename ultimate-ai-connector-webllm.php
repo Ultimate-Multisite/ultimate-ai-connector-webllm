@@ -33,6 +33,7 @@ require_once __DIR__ . '/inc/settings.php';
 require_once __DIR__ . '/inc/admin.php';
 require_once __DIR__ . '/inc/rest-api.php';
 require_once __DIR__ . '/inc/http-filters.php';
+require_once __DIR__ . '/inc/widget-injector.php';
 
 // ---------------------------------------------------------------------------
 // SDK-dependent files (only loaded when WordPress AI Client SDK is present).
@@ -83,6 +84,8 @@ add_filter(
 add_action( 'admin_menu', __NAMESPACE__ . '\\register_worker_admin_page' );
 add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_worker_assets' );
 add_action( 'options-connectors-wp-admin_init', __NAMESPACE__ . '\\enqueue_connector_module' );
+
+register_widget_injector_hooks();
 
 if ( function_exists( __NAMESPACE__ . '\\register_provider' ) ) {
 	add_action( 'init', __NAMESPACE__ . '\\register_provider', 5 );
