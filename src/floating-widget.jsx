@@ -2,14 +2,24 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2025-2026 Marcus Quinn
  *
- * Floating widget — phase 3 of p001.
+ * WebLLM admin-bar widget.
  *
- * Mounts a small floating icon + start modal in every wp-admin page that
- * loads this script. Connects to the SharedWorker built in t006 and exposes
- * a public JS API on `window.webllmWidget` for the apiFetch middleware
- * (t010) and other consumers to call.
+ * Replaces the original floating corner badge (t007) with an admin-bar
+ * status indicator (t013) plus a centred start modal. Also hooks the
+ * SharedWorker's `needs-load` broadcast so an incoming inference job
+ * wakes the engine automatically — either silently when `autoStart` is
+ * enabled or by popping the start modal.
  *
- * Public API surface (consumed by t010):
+ * Responsibilities:
+ *   - Drive the pre-rendered admin-bar node (`#wp-admin-bar-webllm-status`)
+ *     imperatively, since WordPress owns its DOM. Dot colour and label
+ *     reflect live SharedWorker state.
+ *   - Mount the React start modal into a detached root under <body>. The
+ *     modal is only visible when `modalOpen` is true.
+ *   - Expose the stable `window.webllmWidget` API consumed by the apiFetch
+ *     middleware (t010) and any future consumers.
+ *
+ * Public API surface:
  *   window.webllmWidget = {
  *     getStatus()    : Promise<StateSnapshot>,
  *     promptAndLoad(): Promise<void>,   // shows modal if not ready
@@ -285,83 +295,102 @@ function useSharedWorker() {
 // ---------------------------------------------------------------------------
 
 /**
- * Corner badge that summarises the SharedWorker state.
+ * Human-readable label for each SharedWorker state.
  *
- * Click → toggle the modal. A separate Stop button appears when busy/ready.
- *
- * @param {Object}   props
- * @param {Object}   props.state
- * @param {Function} props.onClick
- * @param {Function} props.onStop
+ * @param {string} s
+ * @return {string}
  */
-function FloatingIcon( { state, onClick, onStop } ) {
-	const s = ( state && state.state ) || 'connecting';
-	const showStop = s === 'ready' || s === 'busy' || s === 'loading';
-	const label = ( () => {
-		switch ( s ) {
-			case 'connecting':
-				return __( 'Init', 'ultimate-ai-connector-webllm' );
-			case 'idle':
-				return __( 'Idle', 'ultimate-ai-connector-webllm' );
-			case 'loading':
-				return __( 'Load', 'ultimate-ai-connector-webllm' );
-			case 'ready':
-				return __( 'Ready', 'ultimate-ai-connector-webllm' );
-			case 'busy':
-				return __( 'Busy', 'ultimate-ai-connector-webllm' );
-			case 'error':
-				return __( 'Err', 'ultimate-ai-connector-webllm' );
-			default:
-				return s;
-		}
-	} )();
+function stateLabel( s ) {
+	switch ( s ) {
+		case 'connecting':
+			return __( 'Connecting', 'ultimate-ai-connector-webllm' );
+		case 'idle':
+			return __( 'WebLLM: idle', 'ultimate-ai-connector-webllm' );
+		case 'loading':
+			return __( 'WebLLM: loading', 'ultimate-ai-connector-webllm' );
+		case 'ready':
+			return __( 'WebLLM: ready', 'ultimate-ai-connector-webllm' );
+		case 'busy':
+			return __( 'WebLLM: busy', 'ultimate-ai-connector-webllm' );
+		case 'error':
+			return __( 'WebLLM: error', 'ultimate-ai-connector-webllm' );
+		default:
+			return `WebLLM: ${ s }`;
+	}
+}
 
-	return h(
-		Fragment,
-		null,
-		showStop &&
-			h(
-				'button',
-				{
-					type: 'button',
-					className: 'webllm-widget-icon-stop',
-					onClick: ( e ) => {
-						e.stopPropagation();
-						onStop();
-					},
-					'aria-label': __(
-						'Unload AI model',
-						'ultimate-ai-connector-webllm'
-					),
-				},
-				__( 'Stop', 'ultimate-ai-connector-webllm' )
-			),
-		h(
-			'div',
-			{
-				className: 'webllm-widget-icon',
-				'data-state': s,
-				role: 'button',
-				tabIndex: 0,
-				'aria-label': __(
-					'WebLLM widget',
-					'ultimate-ai-connector-webllm'
-				),
-				onClick,
-				onKeyDown: ( e ) => {
-					if ( e.key === 'Enter' || e.key === ' ' ) {
-						e.preventDefault();
-						onClick();
-					}
-				},
-			},
-			h(
-				'span',
-				{ className: 'webllm-widget-icon-label', 'aria-live': 'polite' },
-				label
-			)
-		)
+/**
+ * Imperatively drive the pre-rendered admin-bar status node.
+ *
+ * WordPress renders `#wp-admin-bar-webllm-status` on the server (see
+ * inc/widget-injector.php → register_admin_bar_node). We attach click
+ * handlers to the submenu items and update the dot's `data-state`
+ * attribute + the label on every state change. Using imperative DOM
+ * updates (instead of a React portal) keeps us out of WordPress's
+ * admin-bar markup.
+ *
+ * @param {Object} options
+ * @param {Object} options.state        Current SharedWorker state snapshot.
+ * @param {string} options.progressText Optional progress summary for loading state.
+ * @param {Function} options.onStart
+ * @param {Function} options.onStop
+ * @param {Function} options.onRoot     Click handler for the top-level node.
+ */
+function updateAdminBar( { state, progressText, onStart, onStop, onRoot } ) {
+	const root = document.getElementById( 'wp-admin-bar-webllm-status' );
+	if ( ! root ) {
+		return;
+	}
+
+	const dot = root.querySelector( '.webllm-admin-bar-dot' );
+	const label = root.querySelector( '.webllm-admin-bar-label' );
+	const s = ( state && state.state ) || 'connecting';
+
+	if ( dot ) {
+		dot.setAttribute( 'data-state', s );
+	}
+	if ( label ) {
+		let text = stateLabel( s );
+		if ( s === 'loading' && progressText ) {
+			text = progressText.slice( 0, 40 );
+		} else if ( s === 'ready' && state?.currentModelId ) {
+			text = __( 'WebLLM ▸ ', 'ultimate-ai-connector-webllm' ) +
+				state.currentModelId.replace( /-MLC.*$/, '' ).slice( 0, 32 );
+		}
+		label.textContent = text;
+	}
+
+	// Bind click handlers once (idempotent via data-bound flag).
+	const topLink = root.querySelector( '.ab-item' );
+	if ( topLink && ! topLink.dataset.webllmBound ) {
+		topLink.dataset.webllmBound = '1';
+		topLink.addEventListener( 'click', ( e ) => {
+			e.preventDefault();
+			onRoot();
+		} );
+	}
+
+	const startLink = document.querySelector(
+		'#wp-admin-bar-webllm-status-start .ab-item'
 	);
+	if ( startLink && ! startLink.dataset.webllmBound ) {
+		startLink.dataset.webllmBound = '1';
+		startLink.addEventListener( 'click', ( e ) => {
+			e.preventDefault();
+			onStart();
+		} );
+	}
+
+	const stopLink = document.querySelector(
+		'#wp-admin-bar-webllm-status-stop .ab-item'
+	);
+	if ( stopLink && ! stopLink.dataset.webllmBound ) {
+		stopLink.dataset.webllmBound = '1';
+		stopLink.addEventListener( 'click', ( e ) => {
+			e.preventDefault();
+			onStop();
+		} );
+	}
 }
 
 /**
@@ -542,8 +571,10 @@ function StartModal( {
 
 /**
  * Top-level widget. Owns the SharedWorker connection and the public window
- * API. Resolves/rejects the pending promptAndLoad() promise based on state
- * transitions.
+ * API. Drives the admin-bar node imperatively and renders the modal via
+ * React. Resolves/rejects the pending promptAndLoad() promise based on
+ * state transitions, and auto-starts in response to `needs-load` broadcasts
+ * when `webllmConnector.autoStart` is enabled.
  */
 function WidgetRoot() {
 	const { state, client } = useSharedWorker();
@@ -554,6 +585,7 @@ function WidgetRoot() {
 		vramHintGb: 0,
 	} );
 	const pendingPromiseRef = useRef( null );
+	const autoStartAttemptedRef = useRef( false );
 
 	// Detect hardware once on mount.
 	useEffect( () => {
@@ -615,10 +647,42 @@ function WidgetRoot() {
 		};
 	}, [ client, state?.state ] );
 
+	// Handle `needs-load` broadcasts from the SharedWorker idle-peek loop.
+	// The shared-worker sends these as a separate message type (not a
+	// state snapshot) so the React state machine above stays simple. We
+	// auto-start the engine when config opts in, or pop the modal otherwise.
+	useEffect( () => {
+		if ( ! client ) return;
+		const unsub = client.subscribe( ( msg ) => {
+			if ( msg?.type !== 'needs-load' ) return;
+			// Debounce: only act once per idle cycle to avoid double-modal.
+			if ( autoStartAttemptedRef.current ) return;
+			if ( state?.state === 'ready' || state?.state === 'loading' ) return;
+			autoStartAttemptedRef.current = true;
+			if ( CFG.autoStart ) {
+				// Silent path — kick off the load directly. The modal stays
+				// closed; users see progress via the admin-bar dot + label.
+				client.loadModel( null ).catch( () => undefined );
+			} else {
+				// Prompt path — same as promptAndLoad() but without an
+				// awaited Promise (the triggering request is already
+				// waiting server-side).
+				setModalOpen( true );
+			}
+		} );
+		return unsub;
+	}, [ client, state?.state ] );
+
+	// Reset the auto-start latch whenever the engine transitions out of a
+	// loaded state, so the next idle-cycle prompt will fire again.
+	useEffect( () => {
+		if ( state?.state === 'idle' || state?.state === 'error' ) {
+			autoStartAttemptedRef.current = false;
+		}
+	}, [ state?.state ] );
+
 	const handleStart = useCallback( async () => {
 		if ( ! client ) return;
-		// If we're already ready, the modal's primary button is "OK" — just
-		// resolve and close.
 		if ( state?.state === 'ready' ) {
 			if ( pendingPromiseRef.current ) {
 				pendingPromiseRef.current.resolve();
@@ -629,10 +693,8 @@ function WidgetRoot() {
 		}
 		try {
 			await client.loadModel( hardware.modelId || null );
-			// State broadcast handles transition to 'ready' which resolves
-			// the pending promise via the effect above.
 		} catch ( _ ) {
-			// State broadcast already updated UI; nothing else to do here.
+			// State broadcast already updated UI.
 		}
 	}, [ client, state?.state, hardware.modelId ] );
 
@@ -652,25 +714,35 @@ function WidgetRoot() {
 		}
 	}, [ client ] );
 
-	const handleIconClick = useCallback( () => {
+	const handleRootClick = useCallback( () => {
+		// Clicking the admin-bar root toggles the modal so the user can
+		// see progress, errors, and manually Start/Stop.
 		setModalOpen( ( open ) => ! open );
 	}, [] );
+
+	const handleAdminBarStart = useCallback( () => {
+		setModalOpen( true );
+		handleStart();
+	}, [ handleStart ] );
+
+	// Keep the admin-bar DOM in sync with state on every render.
+	useEffect( () => {
+		updateAdminBar( {
+			state,
+			progressText: state?.progress?.text || '',
+			onStart: handleAdminBarStart,
+			onStop: handleStop,
+			onRoot: handleRootClick,
+		} );
+	} );
 
 	const canStart =
 		!! client &&
 		state?.state !== 'connecting' &&
 		state?.state !== 'loading';
 
-	return h(
-		Fragment,
-		null,
-		h( FloatingIcon, {
-			state,
-			onClick: handleIconClick,
-			onStop: handleStop,
-		} ),
-		modalOpen &&
-			h( StartModal, {
+	return modalOpen
+		? h( StartModal, {
 				state,
 				hardware,
 				progress: state?.progress,
@@ -678,8 +750,8 @@ function WidgetRoot() {
 				onStart: handleStart,
 				onCancel: handleCancel,
 				canStart,
-			} )
-	);
+		  } )
+		: null;
 }
 
 // ---------------------------------------------------------------------------

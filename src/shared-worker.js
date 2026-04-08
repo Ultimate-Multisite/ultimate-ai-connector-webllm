@@ -48,6 +48,12 @@ const ports = new Set();
 /** @type {boolean} */
 let pollingActive = false;
 
+/** @type {boolean} */
+let idlePeekActive = false;
+
+/** @type {number} */
+let lastAnnouncedPendingJobs = 0;
+
 // ---------------------------------------------------------------------------
 // Broadcast helpers
 // ---------------------------------------------------------------------------
@@ -99,6 +105,14 @@ function setState( next, extra = {} ) {
 		lastError = extra.error;
 	}
 	broadcast( snapshot() );
+
+	// Engine went active → broker polling handles traffic, peek loop is
+	// redundant. Engine went inactive → start peeking for incoming jobs.
+	if ( next === 'ready' || next === 'busy' || next === 'loading' ) {
+		stopIdlePeeking();
+	} else {
+		startIdlePeeking();
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +131,7 @@ function setState( next, extra = {} ) {
  */
 async function autoPickModel( list ) {
 	let budgetMB = 1400; // fallback when WebGPU isn't available yet
+	let hasShaderF16 = false;
 	try {
 		// eslint-disable-next-line no-undef
 		const adapter = await self.navigator?.gpu?.requestAdapter();
@@ -124,6 +139,13 @@ async function autoPickModel( list ) {
 			budgetMB = Math.floor(
 				( adapter.limits.maxBufferSize / 1024 / 1024 ) * 0.7
 			);
+		}
+		// Only consider models whose kernels the adapter can actually
+		// compile. Without the `shader-f16` WebGPU extension, any model
+		// with f16/BF16 weights throws "This model requires WebGPU
+		// extension shader-f16" at load time — better to never attempt it.
+		if ( adapter?.features && typeof adapter.features.has === 'function' ) {
+			hasShaderF16 = adapter.features.has( 'shader-f16' );
 		}
 	} catch ( e ) {}
 
@@ -149,6 +171,10 @@ async function autoPickModel( list ) {
 		return 0;
 	};
 
+	// f16/BF16 variants cannot load without the shader-f16 WebGPU extension.
+	const unsupported = ( id ) =>
+		! hasShaderF16 && /f16|BF16/i.test( id || '' );
+
 	const candidates = list
 		.map( ( m ) => ( {
 			id: m.model_id || m.id,
@@ -162,11 +188,13 @@ async function autoPickModel( list ) {
 				m.id &&
 				! /embed|reranker/i.test( m.id ) &&
 				/instruct|chat/i.test( m.id ) &&
+				! unsupported( m.id ) &&
 				m.vram <= budgetMB
 		);
 
 	if ( candidates.length === 0 ) {
-		// Nothing fits the budget — fall back to absolute smallest instruct model.
+		// Nothing fits the budget — fall back to absolute smallest
+		// supported instruct model (still honours the f16 filter).
 		const anyInstruct = list
 			.map( ( m ) => ( {
 				id: m.model_id || m.id,
@@ -179,10 +207,11 @@ async function autoPickModel( list ) {
 				( m ) =>
 					m.id &&
 					! /embed|reranker/i.test( m.id ) &&
-					/instruct|chat/i.test( m.id )
+					/instruct|chat/i.test( m.id ) &&
+					! unsupported( m.id )
 			)
 			.sort( ( a, b ) => a.vram - b.vram );
-		return anyInstruct[ 0 ]?.id || list[ 0 ].model_id || list[ 0 ].id;
+		return anyInstruct[ 0 ]?.id || null;
 	}
 
 	// Prefer newer family, then larger model within the family (bigger = smarter).
@@ -326,6 +355,79 @@ function startBrokerPolling() {
  */
 function stopBrokerPolling() {
 	pollingActive = false;
+}
+
+/**
+ * Start the idle-peek loop.
+ *
+ * When the engine is NOT in `ready`/`busy`, the broker-polling loop above
+ * is dormant — which means a pending job enqueued by a REST client would
+ * go unserved until the user manually starts the model. To close that
+ * gap we poll `/webllm/v1/status` at a low frequency and, on detecting
+ * `pending_jobs > 0`, broadcast a `needs-load` event to all connected
+ * ports. The widget reacts by auto-starting (if `autoStart` is enabled
+ * via localised config) or by opening the start modal.
+ *
+ * Only one peek loop runs at a time, and it exits as soon as the engine
+ * transitions to `loading`/`ready`/`busy` — at which point `startBrokerPolling`
+ * takes over the same HTTP connection budget.
+ */
+function startIdlePeeking() {
+	if ( idlePeekActive ) {
+		return;
+	}
+	idlePeekActive = true;
+
+	( async () => {
+		// 3-second interval is a reasonable balance: fast enough that a
+		// user-initiated request doesn't time out the REST client (which
+		// long-polls for ~180s by default), slow enough not to hammer the
+		// DB on a sleeping install.
+		const INTERVAL_MS = 3000;
+
+		while ( idlePeekActive && state !== 'ready' && state !== 'busy' ) {
+			try {
+				// eslint-disable-next-line no-undef
+				const res = await fetch( '/wp-json/webllm/v1/status', {
+					method: 'GET',
+					credentials: 'same-origin',
+				} );
+				if ( res.ok ) {
+					const data = await res.json();
+					const pending =
+						typeof data.pending_jobs === 'number'
+							? data.pending_jobs
+							: 0;
+
+					if ( pending > 0 && lastAnnouncedPendingJobs === 0 ) {
+						// Rising-edge trigger: broadcast once per burst so
+						// the widget isn't spammed with duplicate modals.
+						broadcast( {
+							type: 'needs-load',
+							pendingJobs: pending,
+							activeModel:
+								typeof data.active_model === 'string'
+									? data.active_model
+									: '',
+						} );
+					}
+					lastAnnouncedPendingJobs = pending;
+				}
+			} catch ( _ ) {
+				// Network blip — no-op, try again next tick.
+			}
+			await new Promise( ( r ) => setTimeout( r, INTERVAL_MS ) );
+		}
+		idlePeekActive = false;
+	} )();
+}
+
+/**
+ * Stop the idle-peek loop. Safe to call when already stopped.
+ */
+function stopIdlePeeking() {
+	idlePeekActive = false;
+	lastAnnouncedPendingJobs = 0;
 }
 
 /**
@@ -522,4 +624,10 @@ self.addEventListener( 'connect', ( event ) => {
 	// port.start() is required when using addEventListener instead of onmessage.
 	// Calling it when onmessage is already set is a no-op, so this is safe.
 	port.start();
+
+	// Kick off idle peeking on first connect so we start watching for
+	// incoming jobs immediately. setState() keeps it in sync from here on.
+	if ( state !== 'ready' && state !== 'busy' && state !== 'loading' ) {
+		startIdlePeeking();
+	}
 } );

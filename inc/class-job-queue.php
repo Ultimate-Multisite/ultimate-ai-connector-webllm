@@ -219,4 +219,50 @@ class Job_Queue {
 		$v = get_transient( self::ACTIVE_MODEL );
 		return is_string( $v ) ? $v : '';
 	}
+
+	/**
+	 * Count pending (unclaimed) jobs without mutating the queue.
+	 *
+	 * Used by /webllm/v1/status so idle SharedWorkers can detect incoming
+	 * traffic and prompt the user to start the engine. Bypasses option
+	 * memoisation for the same reason `claim_next()` and `wait_for_result()`
+	 * do — otherwise a SharedWorker looping inside one PHP request would
+	 * see a stale snapshot.
+	 *
+	 * @return int Number of pending jobs in the queue.
+	 */
+	public static function get_pending_count(): int {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$wpdb->query( 'COMMIT' );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$raw = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+				self::QUEUE_OPTION
+			)
+		);
+		$queue = is_string( $raw ) ? maybe_unserialize( $raw ) : [];
+		if ( ! is_array( $queue ) || empty( $queue ) ) {
+			return 0;
+		}
+		// Count only entries whose transient still exists and is pending;
+		// expired/orphaned entries shouldn't trigger a user prompt.
+		$count = 0;
+		foreach ( $queue as $id ) {
+			$opt = '_transient_' . self::JOB_TRANSIENT_PREFIX . $id;
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$row = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+					$opt
+				)
+			);
+			$job = is_string( $row ) ? maybe_unserialize( $row ) : null;
+			if ( is_array( $job ) && ( $job['status'] ?? '' ) === 'pending' ) {
+				$count++;
+			}
+		}
+		return $count;
+	}
 }

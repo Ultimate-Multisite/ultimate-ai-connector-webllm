@@ -55,6 +55,9 @@ function get_localized_widget_config(): array {
 		'runtimeMode'                  => (string) get_option( 'webllm_runtime_mode', 'auto' ),
 		'widgetEnabled'                => (bool) get_option( 'webllm_widget_enabled', true ),
 		'widgetAutostart'              => (bool) get_option( 'webllm_widget_autostart', false ),
+		// Auto-load the engine when a pending job is detected (t014/t015).
+		// Distinct from `widgetAutostart` which loads on page-ready.
+		'autoStart'                    => (bool) get_option( 'webllm_auto_start', false ),
 		'widgetBundleUrl'              => plugins_url( 'build/floating-widget.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
 		'middlewareBundleUrl'          => plugins_url( 'build/apifetch-middleware.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
 		'sharedWorkerUrl'              => plugins_url( 'build/shared-worker.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
@@ -68,24 +71,35 @@ function get_localized_widget_config(): array {
 }
 
 /**
+ * True if the widget should be injected for the current user & settings.
+ */
+function widget_should_inject(): bool {
+	if ( ! is_user_logged_in() ) {
+		return false;
+	}
+	if ( ! current_user_can( 'edit_posts' ) ) {
+		return false;
+	}
+	$mode = (string) get_option( 'webllm_runtime_mode', 'auto' );
+	if ( 'disabled' === $mode || 'dedicated-tab' === $mode ) {
+		return false;
+	}
+	if ( ! (bool) get_option( 'webllm_widget_enabled', true ) ) {
+		return false;
+	}
+	return true;
+}
+
+/**
  * Enqueues the widget bootstrap script in the footer.
  *
  * Gated on user permissions and the runtime-mode/widget-enabled options so
- * disabling the widget in settings has zero page-weight cost.
+ * disabling the widget in settings has zero page-weight cost. Loads on both
+ * admin pages (always) and the front-end (whenever the admin bar is showing,
+ * since that's where the status indicator lives).
  */
 function inject_widget_bootstrap(): void {
-	if ( ! is_user_logged_in() ) {
-		return;
-	}
-	if ( ! current_user_can( 'edit_posts' ) ) {
-		return;
-	}
-
-	$mode = (string) get_option( 'webllm_runtime_mode', 'auto' );
-	if ( 'disabled' === $mode || 'dedicated-tab' === $mode ) {
-		return;
-	}
-	if ( ! (bool) get_option( 'webllm_widget_enabled', true ) ) {
+	if ( ! widget_should_inject() ) {
 		return;
 	}
 
@@ -102,13 +116,140 @@ function inject_widget_bootstrap(): void {
 }
 
 /**
- * Registers the admin and (optionally) front-end footer hooks.
+ * Adds the WebLLM status node to the WordPress admin bar.
+ *
+ * Renders an empty placeholder whose label and colour are updated at runtime
+ * by src/floating-widget.jsx via SharedWorker state broadcasts. The submenu
+ * nodes map to the widget's public API (Start / Stop / Open worker page).
+ *
+ * @param \WP_Admin_Bar $bar
+ */
+function register_admin_bar_node( $bar ): void {
+	if ( ! ( $bar instanceof \WP_Admin_Bar ) ) {
+		return;
+	}
+	if ( ! widget_should_inject() ) {
+		return;
+	}
+
+	// Top-level status node — label is a placeholder until the widget
+	// boots and pushes the real state into the DOM.
+	$bar->add_menu(
+		[
+			'id'    => 'webllm-status',
+			'title' => '<span class="ab-icon webllm-admin-bar-dot" data-state="connecting" aria-hidden="true"></span><span class="ab-label webllm-admin-bar-label">WebLLM</span>',
+			'href'  => '#',
+			'meta'  => [
+				'class' => 'webllm-admin-bar-root',
+				'title' => __( 'WebLLM (in-browser AI) status', 'ultimate-ai-connector-webllm' ),
+			],
+		]
+	);
+
+	$bar->add_menu(
+		[
+			'parent' => 'webllm-status',
+			'id'     => 'webllm-status-start',
+			'title'  => __( 'Start / load model', 'ultimate-ai-connector-webllm' ),
+			'href'   => '#',
+			'meta'   => [ 'class' => 'webllm-admin-bar-start' ],
+		]
+	);
+
+	$bar->add_menu(
+		[
+			'parent' => 'webllm-status',
+			'id'     => 'webllm-status-stop',
+			'title'  => __( 'Stop / unload model', 'ultimate-ai-connector-webllm' ),
+			'href'   => '#',
+			'meta'   => [ 'class' => 'webllm-admin-bar-stop' ],
+		]
+	);
+
+	$bar->add_menu(
+		[
+			'parent' => 'webllm-status',
+			'id'     => 'webllm-status-open',
+			'title'  => __( 'Open worker diagnostics', 'ultimate-ai-connector-webllm' ),
+			'href'   => admin_url( 'tools.php?page=webllm-worker' ),
+		]
+	);
+
+	$bar->add_menu(
+		[
+			'parent' => 'webllm-status',
+			'id'     => 'webllm-status-settings',
+			'title'  => __( 'Connector settings', 'ultimate-ai-connector-webllm' ),
+			'href'   => admin_url( 'options-general.php?page=ultimate-ai-connector-webllm' ),
+		]
+	);
+}
+
+/**
+ * Prints the tiny stylesheet for the admin bar status dot + submenu entries.
+ */
+function print_admin_bar_styles(): void {
+	if ( ! widget_should_inject() ) {
+		return;
+	}
+	?>
+	<style id="webllm-admin-bar-styles">
+		#wpadminbar .webllm-admin-bar-dot {
+			display: inline-block;
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			margin: 10px 6px 0 0;
+			background: #888;
+			vertical-align: top;
+			box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset;
+			transition: background 120ms ease;
+		}
+		#wpadminbar .webllm-admin-bar-dot[data-state="connecting"] { background: #888; }
+		#wpadminbar .webllm-admin-bar-dot[data-state="idle"]       { background: #aaa; }
+		#wpadminbar .webllm-admin-bar-dot[data-state="loading"]    { background: #f0b429; animation: webllm-pulse 1.2s ease-in-out infinite; }
+		#wpadminbar .webllm-admin-bar-dot[data-state="ready"]      { background: #46b450; }
+		#wpadminbar .webllm-admin-bar-dot[data-state="busy"]       { background: #00a0d2; animation: webllm-pulse 0.8s ease-in-out infinite; }
+		#wpadminbar .webllm-admin-bar-dot[data-state="needs-load"] { background: #f0b429; animation: webllm-pulse 0.6s ease-in-out infinite; }
+		#wpadminbar .webllm-admin-bar-dot[data-state="error"]      { background: #dc3232; }
+		@keyframes webllm-pulse {
+			0%, 100% { opacity: 1; }
+			50%      { opacity: 0.35; }
+		}
+	</style>
+	<?php
+}
+
+/**
+ * Registers the admin and front-end footer hooks + admin bar node.
  *
  * Called from the plugin entry point at load time.
  */
 function register_widget_injector_hooks(): void {
+	// Bootstrap injection on every admin page.
 	add_action( 'admin_footer', __NAMESPACE__ . '\\inject_widget_bootstrap' );
-	if ( (bool) get_option( 'webllm_widget_on_frontend', false ) ) {
-		add_action( 'wp_footer', __NAMESPACE__ . '\\inject_widget_bootstrap' );
+
+	// Front-end bootstrap injection whenever the admin bar is visible — the
+	// status node lives there, so we need the widget JS to drive it. The
+	// legacy `webllm_widget_on_frontend` option is still honoured as an
+	// explicit opt-in that runs even when the admin bar is hidden.
+	add_action( 'wp_footer', __NAMESPACE__ . '\\maybe_inject_frontend_bootstrap' );
+
+	// Admin bar node + stylesheet.
+	add_action( 'admin_bar_menu', __NAMESPACE__ . '\\register_admin_bar_node', 100 );
+	add_action( 'wp_before_admin_bar_render', __NAMESPACE__ . '\\print_admin_bar_styles' );
+	add_action( 'wp_head', __NAMESPACE__ . '\\print_admin_bar_styles' );
+	add_action( 'admin_head', __NAMESPACE__ . '\\print_admin_bar_styles' );
+}
+
+/**
+ * Front-end footer hook that only injects when there's somewhere useful for
+ * the widget to attach (the admin bar) or when the admin has explicitly
+ * opted in via `webllm_widget_on_frontend`.
+ */
+function maybe_inject_frontend_bootstrap(): void {
+	if ( ! is_admin_bar_showing() && ! (bool) get_option( 'webllm_widget_on_frontend', false ) ) {
+		return;
 	}
+	inject_widget_bootstrap();
 }

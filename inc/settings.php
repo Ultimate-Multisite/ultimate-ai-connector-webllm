@@ -113,6 +113,23 @@ function register_settings(): void {
 			'show_in_rest'      => true,
 		]
 	);
+
+	// When enabled, a pending inference job detected via the /status
+	// `pending_jobs` counter will automatically trigger model load without
+	// showing the start modal. Users opt in once, then repeat sessions
+	// resume seamlessly because the weights are already in IndexedDB.
+	register_setting(
+		'ultimate_ai_connector_webllm',
+		'webllm_auto_start',
+		[
+			'type'              => 'boolean',
+			'sanitize_callback' => static function ( $v ): bool {
+				return (bool) $v;
+			},
+			'default'           => false,
+			'show_in_rest'      => true,
+		]
+	);
 }
 
 /**

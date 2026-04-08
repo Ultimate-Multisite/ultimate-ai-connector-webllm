@@ -56,14 +56,33 @@ function WebLlmConnectorCard( { label, description } ) {
 	const [ widgetEnabled, setWidgetEnabled ] = useState( true );
 	const [ widgetOnFrontend, setWidgetOnFrontend ] = useState( false );
 	const [ widgetAutostart, setWidgetAutostart ] = useState( false );
+	const [ autoStart, setAutoStart ] = useState( false );
 	const [ models, setModels ] = useState( [] );
 	const [ workerOnline, setWorkerOnline ] = useState( false );
+	const [ hasShaderF16, setHasShaderF16 ] = useState( false );
 	const [ saveError, setSaveError ] = useState( null );
 
 	const sharedWorkerAvailable =
 		typeof SharedWorker !== 'undefined' &&
 		typeof navigator !== 'undefined' &&
 		'gpu' in navigator;
+
+	// Detect shader-f16 on mount so we can hide f16 / BF16 models the
+	// local GPU cannot compile. The settings page may be open in a
+	// browser other than the one running the worker tab, so this is
+	// only a hint — but the admin bar widget will also filter
+	// independently at engine-load time.
+	useEffect( () => {
+		( async () => {
+			try {
+				if ( ! navigator.gpu ) return;
+				const adapter = await navigator.gpu.requestAdapter();
+				if ( adapter?.features?.has?.( 'shader-f16' ) ) {
+					setHasShaderF16( true );
+				}
+			} catch ( e ) {}
+		} )();
+	}, [] );
 
 	const effectiveRuntime =
 		runtimeMode === 'auto'
@@ -90,7 +109,7 @@ function WebLlmConnectorCard( { label, description } ) {
 	const loadAll = useCallback( async () => {
 		try {
 			const settings = await apiFetch( {
-				path: '/wp/v2/settings?_fields=webllm_default_model,webllm_request_timeout,webllm_allow_remote_clients,webllm_context_window,webllm_runtime_mode,webllm_widget_enabled,webllm_widget_on_frontend,webllm_widget_autostart',
+				path: '/wp/v2/settings?_fields=webllm_default_model,webllm_request_timeout,webllm_allow_remote_clients,webllm_context_window,webllm_runtime_mode,webllm_widget_enabled,webllm_widget_on_frontend,webllm_widget_autostart,webllm_auto_start',
 			} );
 			setDefaultModel( settings.webllm_default_model || '' );
 			setTimeoutVal( settings.webllm_request_timeout ?? 180 );
@@ -100,12 +119,21 @@ function WebLlmConnectorCard( { label, description } ) {
 			setWidgetEnabled( settings.webllm_widget_enabled ?? true );
 			setWidgetOnFrontend( !! settings.webllm_widget_on_frontend );
 			setWidgetAutostart( !! settings.webllm_widget_autostart );
+			setAutoStart( !! settings.webllm_auto_start );
 		} catch {}
 		try {
-			const m = await apiFetch( { path: '/webllm/v1/models' } );
-			if ( m && Array.isArray( m.data ) ) {
-				setModels( m.data );
+			// Prefer the full /catalog (registered since t013) so the
+			// admin can pick any reported model. Fall back to the
+			// single-candidate /models endpoint on older installs.
+			let list = [];
+			try {
+				const cat = await apiFetch( { path: '/webllm/v1/catalog' } );
+				if ( cat && Array.isArray( cat.data ) ) list = cat.data;
+			} catch ( e ) {
+				const m = await apiFetch( { path: '/webllm/v1/models' } );
+				if ( m && Array.isArray( m.data ) ) list = m.data;
 			}
+			setModels( list );
 		} catch {}
 		await refreshStatus();
 		setIsLoading( false );
@@ -133,6 +161,7 @@ function WebLlmConnectorCard( { label, description } ) {
 					webllm_widget_enabled: widgetEnabled,
 					webllm_widget_on_frontend: widgetOnFrontend,
 					webllm_widget_autostart: widgetAutostart,
+					webllm_auto_start: autoStart,
 				},
 			} );
 			setIsExpanded( false );
@@ -151,9 +180,15 @@ function WebLlmConnectorCard( { label, description } ) {
 		);
 	};
 
+	const visibleModels = models.filter( ( m ) => {
+		const id = m.id || '';
+		if ( hasShaderF16 ) return true;
+		return ! /f16|BF16/i.test( id );
+	} );
+
 	const modelOptions = [
 		{ label: __( 'Auto-select (SDK chooses)' ), value: '' },
-		...models.map( ( m ) => ( { label: m.name || m.id, value: m.id } ) ),
+		...visibleModels.map( ( m ) => ( { label: m.name || m.id, value: m.id } ) ),
 	];
 
 	const actionArea = (
@@ -200,23 +235,23 @@ function WebLlmConnectorCard( { label, description } ) {
 				/>
 
 				<ToggleControl
-					label={ __( 'Enable floating widget', 'ultimate-ai-connector-webllm' ) }
+					label={ __( 'Enable admin-bar status widget', 'ultimate-ai-connector-webllm' ) }
 					checked={ widgetEnabled }
 					onChange={ setWidgetEnabled }
 					help={ __(
-						'Shows a small status icon in the corner of every admin page.',
+						'Shows WebLLM status in the WordPress admin bar with Start / Stop controls. The admin bar is visible on admin pages and (when logged in) on front-end pages.',
 						'ultimate-ai-connector-webllm'
 					) }
 					__nextHasNoMarginBottom
 				/>
 
 				<ToggleControl
-					label={ __( 'Also show widget on front-end pages', 'ultimate-ai-connector-webllm' ) }
+					label={ __( 'Inject widget on front-end even when admin bar is hidden', 'ultimate-ai-connector-webllm' ) }
 					checked={ widgetOnFrontend }
 					onChange={ setWidgetOnFrontend }
 					disabled={ ! widgetEnabled }
 					help={ __(
-						'Only renders for logged-in users with permission to edit posts.',
+						'Rarely needed — the widget normally loads wherever the admin bar is. Enable this only if you have themes that hide the admin bar but you still want the SharedWorker runtime available.',
 						'ultimate-ai-connector-webllm'
 					) }
 					__nextHasNoMarginBottom
@@ -228,7 +263,19 @@ function WebLlmConnectorCard( { label, description } ) {
 					onChange={ setWidgetAutostart }
 					disabled={ ! widgetEnabled }
 					help={ __(
-						'Uses GPU memory continuously. Leave off to load on demand when an AI feature is triggered.',
+						'Loads the model immediately when an admin page opens. Uses GPU memory continuously. Leave off to load on demand.',
+						'ultimate-ai-connector-webllm'
+					) }
+					__nextHasNoMarginBottom
+				/>
+
+				<ToggleControl
+					label={ __( 'Auto-start model when a request arrives', 'ultimate-ai-connector-webllm' ) }
+					checked={ autoStart }
+					onChange={ setAutoStart }
+					disabled={ ! widgetEnabled }
+					help={ __(
+						'When an AI feature triggers a request and no model is loaded, start the model silently instead of showing the start modal. First-time downloads still take a while; subsequent sessions resume from IndexedDB cache.',
 						'ultimate-ai-connector-webllm'
 					) }
 					__nextHasNoMarginBottom

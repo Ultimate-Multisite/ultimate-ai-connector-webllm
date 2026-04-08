@@ -83,14 +83,21 @@ async function autoPickModel( list ) {
 	// Estimate a VRAM budget from the WebGPU adapter. WebGPU doesn't expose
 	// total VRAM; `adapter.limits.maxBufferSize` is a conservative proxy. On
 	// integrated GPUs it's ~2 GB, on discrete 4–24 GB. Reserve 30% headroom
-	// for KV cache and activations.
-	let budgetMB = 1400; // fallback when WebGPU isn't available yet
+	// for KV cache and activations. Also probe `shader-f16` so we never
+	// auto-pick a model the adapter cannot compile.
+	let budgetMB = 1400;
+	let hasShaderF16 = false;
 	try {
 		const adapter = await navigator.gpu?.requestAdapter();
 		if ( adapter?.limits?.maxBufferSize ) {
 			budgetMB = Math.floor( ( adapter.limits.maxBufferSize / 1024 / 1024 ) * 0.7 );
 		}
+		if ( adapter?.features && typeof adapter.features.has === 'function' ) {
+			hasShaderF16 = adapter.features.has( 'shader-f16' );
+		}
 	} catch ( e ) {}
+
+	const unsupported = ( id ) => ! hasShaderF16 && /f16|BF16/i.test( id || '' );
 
 	const familyRank = ( id ) => {
 		if ( /Llama-3\.2.*Instruct/i.test( id ) ) return 6;
@@ -112,11 +119,13 @@ async function autoPickModel( list ) {
 				m.id &&
 				! /embed|reranker/i.test( m.id ) &&
 				/instruct|chat/i.test( m.id ) &&
+				! unsupported( m.id ) &&
 				m.vram <= budgetMB
 		);
 
 	if ( candidates.length === 0 ) {
-		// Nothing fits the budget — fall back to absolute smallest instruct model.
+		// Nothing fits the budget — fall back to absolute smallest
+		// supported instruct model.
 		const anyInstruct = list
 			.map( ( m ) => ( {
 				id: m.model_id || m.id,
@@ -126,10 +135,11 @@ async function autoPickModel( list ) {
 				( m ) =>
 					m.id &&
 					! /embed|reranker/i.test( m.id ) &&
-					/instruct|chat/i.test( m.id )
+					/instruct|chat/i.test( m.id ) &&
+					! unsupported( m.id )
 			)
 			.sort( ( a, b ) => a.vram - b.vram );
-		return anyInstruct[ 0 ]?.id || list[ 0 ].model_id || list[ 0 ].id;
+		return anyInstruct[ 0 ]?.id || '';
 	}
 
 	// Prefer newer family, then larger model within the family (bigger = smarter).
@@ -191,10 +201,14 @@ function App() {
 	const [ status, setStatus ] = useState( 'idle' );
 	const [ jobsServed, setJobsServed ] = useState( 0 );
 	const [ adapterInfo, setAdapterInfo ] = useState( null );
+	const [ hasShaderF16, setHasShaderF16 ] = useState( false );
 	const [ error, setError ] = useState( null );
 	const stopRef = useRef( false );
 
-	// Probe WebGPU adapter info on mount.
+	// Probe WebGPU adapter info + shader-f16 support on mount. f16 models
+	// are hidden from the dropdown when the extension is missing — see
+	// t011 notes: the load would otherwise fail with
+	// "This model requires WebGPU extension shader-f16".
 	useEffect( () => {
 		( async () => {
 			try {
@@ -205,6 +219,9 @@ function App() {
 				const adapter = await navigator.gpu.requestAdapter();
 				if ( adapter && adapter.info ) {
 					setAdapterInfo( adapter.info );
+				}
+				if ( adapter && adapter.features && typeof adapter.features.has === 'function' ) {
+					setHasShaderF16( adapter.features.has( 'shader-f16' ) );
 				}
 			} catch ( e ) {
 				// non-fatal
@@ -439,7 +456,16 @@ function App() {
 		};
 	}, [ engine, modelId ] );
 
-	const modelOptions = modelList.map( ( m ) => ( {
+	// Hide f16/BF16 models when the WebGPU adapter does not expose the
+	// shader-f16 extension — those loads would otherwise fail with
+	// "This model requires WebGPU extension shader-f16".
+	const visibleModels = modelList.filter( ( m ) => {
+		const id = m.model_id || m.id || '';
+		if ( hasShaderF16 ) return true;
+		return ! /f16|BF16/i.test( id );
+	} );
+
+	const modelOptions = visibleModels.map( ( m ) => ( {
 		label: ( m.model_id || m.id ) + ( m.vram_required_MB ? ` (~${ Math.round( m.vram_required_MB ) } MB)` : '' ),
 		value: m.model_id || m.id,
 	} ) );

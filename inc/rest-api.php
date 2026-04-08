@@ -94,6 +94,21 @@ function register_rest_routes(): void {
 			'permission_callback' => '__return_true',
 		]
 	);
+
+	// Full cached model catalogue — separate from /models which only
+	// advertises a single candidate for the SDK capability matcher.
+	// The connector settings UI uses this to let the admin pick any model
+	// the worker has reported. Client-side filters (see connector.jsx)
+	// hide variants the adapter can't compile (e.g. f16 on Pascal).
+	register_rest_route(
+		'webllm/v1',
+		'/catalog',
+		[
+			'methods'             => 'GET',
+			'callback'            => __NAMESPACE__ . '\\rest_catalog',
+			'permission_callback' => __NAMESPACE__ . '\\client_permission_callback',
+		]
+	);
 }
 
 /**
@@ -167,22 +182,12 @@ function worker_permission_callback(): bool {
  * POST /chat/completions — broker to worker, return its response verbatim.
  */
 function rest_chat_completions( \WP_REST_Request $request ) {
-	$active = Job_Queue::get_active_model();
-	if ( '' === $active ) {
-		if ( ! Job_Queue::is_worker_online() ) {
-			return new \WP_Error(
-				'webllm_no_worker',
-				__( 'No WebLLM worker is currently connected. Open the WebLLM Worker page in a desktop browser tab.', 'ultimate-ai-connector-webllm' ),
-				[ 'status' => 503 ]
-			);
-		}
-		return new \WP_Error(
-			'webllm_no_model',
-			__( 'The WebLLM worker tab is open but has not finished loading a model yet. Wait for the model to finish downloading, then try again.', 'ultimate-ai-connector-webllm' ),
-			[ 'status' => 503 ]
-		);
-	}
-
+	// Note: we no longer bail early when no model is active. The new
+	// SharedWorker runtime can detect an enqueued job via the /status
+	// `pending_jobs` counter and auto-load the model while the client is
+	// still long-polling. Enqueue unconditionally and let `wait_for_result`
+	// do its job — if it times out we return a friendlier message that
+	// points the user at the admin-bar start control.
 	$payload = $request->get_json_params();
 	if ( ! is_array( $payload ) ) {
 		$payload = [];
@@ -192,9 +197,25 @@ function rest_chat_completions( \WP_REST_Request $request ) {
 	$result  = Job_Queue::wait_for_result( $id, get_request_timeout() );
 
 	if ( null === $result ) {
+		$worker_online = Job_Queue::is_worker_online();
+		$active        = Job_Queue::get_active_model();
+		if ( ! $worker_online ) {
+			return new \WP_Error(
+				'webllm_no_worker',
+				__( 'No WebLLM worker is currently connected. Open any admin page and click the WebLLM status in the top admin bar to start the in-browser AI.', 'ultimate-ai-connector-webllm' ),
+				[ 'status' => 503 ]
+			);
+		}
+		if ( '' === $active ) {
+			return new \WP_Error(
+				'webllm_not_loaded',
+				__( 'A worker tab is open but no model is loaded yet. Click the WebLLM status in the admin bar and choose Start, or enable auto-start in the connector settings.', 'ultimate-ai-connector-webllm' ),
+				[ 'status' => 503 ]
+			);
+		}
 		return new \WP_Error(
 			'webllm_timeout',
-			__( 'Timed out waiting for the WebLLM worker to respond.', 'ultimate-ai-connector-webllm' ),
+			__( 'Timed out waiting for the WebLLM worker to respond. The model is loaded but inference did not complete in time — try a smaller model or a simpler prompt.', 'ultimate-ai-connector-webllm' ),
 			[ 'status' => 504 ]
 		);
 	}
@@ -354,12 +375,34 @@ function rest_register_worker( \WP_REST_Request $request ) {
 /**
  * GET /status — public-ish status (no sensitive info) used by the connector card.
  */
+/**
+ * GET /catalog — full cached model list.
+ *
+ * Unlike /models (which deliberately advertises a single candidate to the
+ * SDK), /catalog exposes everything the worker has reported. It's used by
+ * the connector settings UI to let the admin pick any model — the client
+ * filters out variants that require WebGPU extensions the adapter doesn't
+ * expose.
+ */
+function rest_catalog( \WP_REST_Request $request ) {
+	$cache = Job_Queue::get_model_cache();
+	return rest_ensure_response(
+		[
+			'object' => 'list',
+			'data'   => array_values( $cache ),
+		]
+	);
+}
+
 function rest_status( \WP_REST_Request $request ) {
 	return rest_ensure_response(
 		[
 			'worker_online' => Job_Queue::is_worker_online(),
 			'active_model'  => Job_Queue::get_active_model(),
 			'model_count'   => count( Job_Queue::get_model_cache() ),
+			// Pending job count so idle SharedWorkers can detect incoming
+			// traffic and prompt the user to start the engine. See t014.
+			'pending_jobs'  => Job_Queue::get_pending_count(),
 		]
 	);
 }

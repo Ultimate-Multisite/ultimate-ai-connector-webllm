@@ -13,9 +13,8 @@ export const FLOATING_WIDGET_CSS = `
 
 #webllm-widget-root {
 	position: fixed;
-	z-index: 99999;
-	bottom: 0;
-	right: 0;
+	z-index: 100000;
+	inset: 0;
 	pointer-events: none;
 }
 
@@ -23,64 +22,7 @@ export const FLOATING_WIDGET_CSS = `
 	box-sizing: border-box;
 }
 
-/* ---- Floating icon (always visible) ---- */
-
-.webllm-widget-icon {
-	pointer-events: auto;
-	position: fixed;
-	bottom: 20px;
-	right: 20px;
-	width: 56px;
-	height: 56px;
-	border-radius: 50%;
-	background: #1e1e1e;
-	color: #fff;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	cursor: pointer;
-	box-shadow: 0 4px 12px rgba( 0, 0, 0, 0.25 );
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	font-size: 11px;
-	font-weight: 600;
-	user-select: none;
-	transition: transform 0.15s ease, background 0.2s ease;
-}
-
-.webllm-widget-icon:hover {
-	transform: scale( 1.05 );
-}
-
-.webllm-widget-icon[data-state="connecting"] { background: #888; }
-.webllm-widget-icon[data-state="idle"]       { background: #555; }
-.webllm-widget-icon[data-state="loading"]    { background: #f0a020; }
-.webllm-widget-icon[data-state="ready"]      { background: #00a32a; }
-.webllm-widget-icon[data-state="busy"]       { background: #2271b1; }
-.webllm-widget-icon[data-state="error"]      { background: #d63638; }
-
-.webllm-widget-icon-label {
-	font-size: 9px;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-}
-
-.webllm-widget-icon-stop {
-	pointer-events: auto;
-	position: fixed;
-	bottom: 20px;
-	right: 84px;
-	height: 28px;
-	padding: 0 10px;
-	border-radius: 14px;
-	background: #d63638;
-	color: #fff;
-	border: none;
-	cursor: pointer;
-	font-size: 11px;
-	font-weight: 600;
-}
-
-/* ---- Modal ---- */
+/* ---- Modal (triggered from admin-bar status or apiFetch middleware) ---- */
 
 .webllm-widget-modal-backdrop {
 	pointer-events: auto;
