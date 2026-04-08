@@ -260,12 +260,24 @@ function App() {
 			// Each doubling of context roughly doubles VRAM for the KV cache.
 			const appConfig = JSON.parse( JSON.stringify( mod.prebuiltAppConfig ) );
 			const entry     = appConfig.model_list.find( ( m ) => ( m.model_id || m.id ) === modelId );
-			if ( entry ) {
+			// model_type: 0 = LLM (default), 1 = embedding, 2 = VLM.
+			// Embedding models reject `context_window_size !== prefill_chunk_size`
+			// ("Embedding currently does not support chunking"), so we must not
+			// apply the LLM-oriented context override to them. We also heuristically
+			// skip any model whose id contains 'embed' in case `model_type` is
+			// missing from the prebuilt entry.
+			const isEmbedding = entry && (
+				entry.model_type === 1 ||
+				/embed/i.test( entry.model_id || entry.id || '' )
+			);
+			if ( entry && ! isEmbedding ) {
 				entry.overrides = {
 					...( entry.overrides || {} ),
 					context_window_size: CFG.contextWindow,
 				};
 				pushLog( `context_window_size override → ${ CFG.contextWindow }` );
+			} else if ( isEmbedding ) {
+				pushLog( `skipping context_window override (embedding model)` );
 			}
 			// Force IndexedDB cache: HuggingFace now redirects shards to the
 			// xet CDN, and `Cache.add()` rejects redirected cross-origin
