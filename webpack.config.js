@@ -23,6 +23,7 @@ module.exports = {
 		connector: path.resolve( __dirname, 'src', 'connector.jsx' ),
 		worker: path.resolve( __dirname, 'src', 'worker.jsx' ),
 		'shared-worker': path.resolve( __dirname, 'src', 'shared-worker.js' ),
+		'floating-widget': path.resolve( __dirname, 'src', 'floating-widget.jsx' ),
 	},
 	output: {
 		path: path.resolve( __dirname, 'build' ),
