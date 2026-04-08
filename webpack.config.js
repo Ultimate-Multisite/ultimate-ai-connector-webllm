@@ -1,10 +1,15 @@
 const defaultConfig = require( '@wordpress/scripts/config/webpack.config' );
 const path = require( 'path' );
 
-// Two entries:
-//   connector.js — ES module loaded by WP 7.0 Connectors page (Script Modules API).
-//   worker.js    — classic script loaded on the Tools → WebLLM Worker admin page,
-//                  bundles @mlc-ai/web-llm so it ships as one self-contained file.
+// Three entries:
+//   connector.js      — ES module loaded by WP 7.0 Connectors page (Script Modules API).
+//   worker.js         — classic script loaded on the Tools → WebLLM Worker admin page,
+//                       bundles @mlc-ai/web-llm so it ships as one self-contained file.
+//   shared-worker.js  — SharedWorker entry point (p001 Phase 2). Hosts a single
+//                       MLCEngine instance inside SharedWorkerGlobalScope, reachable
+//                       from any same-origin tab. Loaded with { type: 'module' }.
+//                       URL must be stable (no content hash) — SharedWorkers are keyed
+//                       by (script URL, name); a hash change spawns a second worker.
 //
 // We can't easily ship two output formats from one webpack config, so the
 // connector entry uses module output via the externals trick from the
@@ -17,6 +22,7 @@ module.exports = {
 	entry: {
 		connector: path.resolve( __dirname, 'src', 'connector.jsx' ),
 		worker: path.resolve( __dirname, 'src', 'worker.jsx' ),
+		'shared-worker': path.resolve( __dirname, 'src', 'shared-worker.js' ),
 	},
 	output: {
 		path: path.resolve( __dirname, 'build' ),
