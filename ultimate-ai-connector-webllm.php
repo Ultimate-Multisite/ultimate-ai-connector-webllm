@@ -55,6 +55,31 @@ add_action( 'rest_api_init', __NAMESPACE__ . '\\register_rest_routes' );
 
 add_filter( 'http_request_args', __NAMESPACE__ . '\\extend_loopback_timeout', 10, 2 );
 
+/**
+ * Register WebLLM as a preferred text-generation provider so that consumers
+ * of `wpai_preferred_text_models` (e.g. the WordPress/ai plugin's AI Experiments
+ * features) route requests to the browser-side engine.
+ *
+ * Only prepended when a default model is configured — an empty model setting
+ * leaves the preference list untouched so other providers remain usable.
+ *
+ * @param array<int, array{0: string, 1: string}> $preferred_models The existing preference list.
+ * @return array<int, array{0: string, 1: string}>
+ */
+add_filter(
+	'wpai_preferred_text_models',
+	static function ( array $preferred_models ): array {
+		$active = (string) get_option( 'webllm_default_model', '' );
+		if ( '' === $active ) {
+			return $preferred_models;
+		}
+
+		array_unshift( $preferred_models, array( 'ultimate-ai-connector-webllm', $active ) );
+		return $preferred_models;
+	},
+	5
+);
+
 add_action( 'admin_menu', __NAMESPACE__ . '\\register_worker_admin_page' );
 add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_worker_assets' );
 add_action( 'options-connectors-wp-admin_init', __NAMESPACE__ . '\\enqueue_connector_module' );
