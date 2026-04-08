@@ -56,6 +56,7 @@ function get_localized_widget_config(): array {
 		'widgetEnabled'                => (bool) get_option( 'webllm_widget_enabled', true ),
 		'widgetAutostart'              => (bool) get_option( 'webllm_widget_autostart', false ),
 		'widgetBundleUrl'              => plugins_url( 'build/floating-widget.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
+		'middlewareBundleUrl'          => plugins_url( 'build/apifetch-middleware.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
 		'sharedWorkerUrl'              => plugins_url( 'build/shared-worker.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
 		'defaultModel'                 => (string) get_option( 'webllm_default_model', '' ),
 		'knownModelIds'                => $known_models,

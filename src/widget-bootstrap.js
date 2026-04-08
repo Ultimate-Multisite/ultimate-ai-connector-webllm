@@ -56,14 +56,25 @@
 	}
 	window.__webllmWidgetBootstrapped = true;
 
-	const script = document.createElement( 'script' );
-	script.src = config.widgetBundleUrl;
-	script.type = 'module';
-	script.async = true;
-	script.onerror = function () {
-		// eslint-disable-next-line no-console
-		console.warn( '[WebLLM] Failed to load widget bundle from', config.widgetBundleUrl );
-		window.__webllmWidgetBootstrapped = false;
+	const loadModule = function ( url, label ) {
+		const script = document.createElement( 'script' );
+		script.src = url;
+		script.type = 'module';
+		script.async = true;
+		script.onerror = function () {
+			// eslint-disable-next-line no-console
+			console.warn( '[WebLLM] Failed to load ' + label + ' bundle from', url );
+		};
+		document.head.appendChild( script );
 	};
-	document.head.appendChild( script );
+
+	loadModule( config.widgetBundleUrl, 'widget' );
+
+	// Load the apiFetch middleware alongside the widget. It registers
+	// itself with @wordpress/api-fetch on import; no exports needed.
+	// Safe to load even if the widget hasn't mounted yet — the middleware
+	// falls through on `window.webllmWidget` being undefined.
+	if ( config.middlewareBundleUrl ) {
+		loadModule( config.middlewareBundleUrl, 'apifetch-middleware' );
+	}
 } )();
