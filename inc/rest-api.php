@@ -211,21 +211,48 @@ function rest_chat_completions( \WP_REST_Request $request ) {
 }
 
 /**
- * GET /models — return only the currently-loaded worker model.
+ * GET /models — advertise a single candidate model.
  *
- * We deliberately do NOT advertise the full `prebuiltAppConfig.model_list`:
+ * Resolution order:
+ *   1. The currently-loaded worker model (hot path — honest answer).
+ *   2. The configured `webllm_default_model` option, if set and present in
+ *      the worker's reported catalog.
+ *   3. The first entry from the cached worker catalog (auto-pick).
+ *
+ * We deliberately never advertise the full `prebuiltAppConfig.model_list`:
  * the AI SDK's capability-matching treats every listed model as usable and
- * would happily route a request to a model that's not loaded, producing a
- * confusing "no worker" error. By exposing only the active model we make
- * the provider honest — the only model the caller can pick is the one the
- * worker can actually serve right now.
+ * would happily route a request to a model that's not loaded. Exposing a
+ * single candidate is safe because the apiFetch middleware intercepts the
+ * request in the browser and calls `webllmWidget.promptAndLoad()` to bring
+ * the engine online before the broker relays the job. Without a cold-start
+ * candidate the PHP SDK rejects the prompt during provider-side capability
+ * matching — long before any JS middleware can run.
  */
 function rest_list_models( \WP_REST_Request $request ) {
-	$active = Job_Queue::get_active_model();
-	$data   = [];
-	if ( '' !== $active ) {
-		$data[] = [ 'id' => $active, 'name' => $active ];
+	$candidate = Job_Queue::get_active_model();
+
+	if ( '' === $candidate ) {
+		$cache       = Job_Queue::get_model_cache();
+		$cache_ids   = [];
+		foreach ( $cache as $entry ) {
+			if ( isset( $entry['id'] ) ) {
+				$cache_ids[] = (string) $entry['id'];
+			}
+		}
+
+		$default = (string) get_option( 'webllm_default_model', '' );
+		if ( '' !== $default && in_array( $default, $cache_ids, true ) ) {
+			$candidate = $default;
+		} elseif ( ! empty( $cache_ids ) ) {
+			$candidate = $cache_ids[0];
+		}
 	}
+
+	$data = [];
+	if ( '' !== $candidate ) {
+		$data[] = [ 'id' => $candidate, 'name' => $candidate ];
+	}
+
 	return rest_ensure_response(
 		[
 			'object' => 'list',
