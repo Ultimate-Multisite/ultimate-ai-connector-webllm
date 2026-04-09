@@ -8,6 +8,7 @@ import {
 	__experimentalRegisterConnector as registerConnector,
 	__experimentalConnectorItem as ConnectorItem,
 } from '@wordpress/connectors';
+import { diagnoseWebGpu, hasIssues } from './webgpu-troubleshooter';
 
 const { createElement, useState, useEffect, useCallback } = wp.element;
 const {
@@ -61,25 +62,22 @@ function WebLlmConnectorCard( { label, description, logo } ) {
 	const [ workerOnline, setWorkerOnline ] = useState( false );
 	const [ hasShaderF16, setHasShaderF16 ] = useState( false );
 	const [ saveError, setSaveError ] = useState( null );
+	const [ gpuDiag, setGpuDiag ] = useState( null );
 
 	const sharedWorkerAvailable =
 		typeof SharedWorker !== 'undefined' &&
 		typeof navigator !== 'undefined' &&
 		'gpu' in navigator;
 
-	// Detect shader-f16 on mount so we can hide f16 / BF16 models the
-	// local GPU cannot compile. The settings page may be open in a
-	// browser other than the one running the worker tab, so this is
-	// only a hint — but the admin bar widget will also filter
-	// independently at engine-load time.
+	// Detect shader-f16 and run WebGPU diagnostics on mount so we can
+	// hide f16 / BF16 models the local GPU cannot compile and surface
+	// troubleshooting guidance when problems are detected.
 	useEffect( () => {
 		( async () => {
 			try {
-				if ( ! navigator.gpu ) return;
-				const adapter = await navigator.gpu.requestAdapter();
-				if ( adapter?.features?.has?.( 'shader-f16' ) ) {
-					setHasShaderF16( true );
-				}
+				const diag = await diagnoseWebGpu();
+				setGpuDiag( diag );
+				setHasShaderF16( diag.hasShaderF16 );
 			} catch ( e ) {}
 		} )();
 	}, [] );
@@ -213,6 +211,28 @@ function WebLlmConnectorCard( { label, description, logo } ) {
 					'ultimate-ai-connector-webllm'
 				) }
 			</div>
+
+			{ hasIssues( gpuDiag ) && (
+				<div style={ { background: '#fef0f0', borderLeft: '4px solid #cc1818', padding: '10px 14px', fontSize: 13 } }>
+					<strong>{ __( 'WebGPU issue detected on this browser:', 'ultimate-ai-connector-webllm' ) }</strong>
+					{ gpuDiag.issues.map( ( issue, idx ) => (
+						<div key={ idx } style={ { marginTop: 6 } }>
+							<strong style={ { color: issue.severity === 'error' ? '#cc1818' : '#996800' } }>{ issue.title }</strong>
+							<span> &mdash; { issue.description }</span>
+							{ issue.steps && (
+								<ol style={ { margin: '4px 0 0 0', paddingLeft: 20 } }>
+									{ issue.steps.map( ( step, si ) => (
+										<li key={ si } style={ { marginBottom: 2 } }>{ step.text }</li>
+									) ) }
+								</ol>
+							) }
+						</div>
+					) ) }
+					<p style={ { marginTop: 8, marginBottom: 0, fontSize: 12, color: '#666' } }>
+						{ __( 'Note: This only affects this browser. The worker tab can run in a different browser with full WebGPU support.', 'ultimate-ai-connector-webllm' ) }
+					</p>
+				</div>
+			) }
 
 			<VStack spacing={ 3 }>
 				<SelectControl

@@ -16,6 +16,8 @@
  * @package UltimateAiConnectorWebLlm
  */
 
+import { diagnoseWebGpu, diagnoseWebLlmError, hasIssues } from './webgpu-troubleshooter';
+
 // Lazy module handle, populated by ensureWebLlmLoaded() on first use.
 let webllm = null;
 async function ensureWebLlmLoaded() {
@@ -203,25 +205,40 @@ function App() {
 	const [ adapterInfo, setAdapterInfo ] = useState( null );
 	const [ hasShaderF16, setHasShaderF16 ] = useState( false );
 	const [ error, setError ] = useState( null );
+	const [ gpuDiag, setGpuDiag ] = useState( null );
 	const stopRef = useRef( false );
 
 	// Probe WebGPU adapter info + shader-f16 support on mount. f16 models
 	// are hidden from the dropdown when the extension is missing — see
 	// t011 notes: the load would otherwise fail with
 	// "This model requires WebGPU extension shader-f16".
+	// Also runs the full diagnostics to surface troubleshooting guidance
+	// when problems are detected.
 	useEffect( () => {
 		( async () => {
 			try {
-				if ( ! navigator.gpu ) {
-					setError( __( 'This browser does not expose WebGPU. Use Chrome or Edge on desktop.', 'ultimate-ai-connector-webllm' ) );
+				const diag = await diagnoseWebGpu();
+				setGpuDiag( diag );
+				setHasShaderF16( diag.hasShaderF16 );
+
+				if ( ! diag.webgpuApiPresent ) {
+					setError( __( 'This browser does not expose WebGPU.', 'ultimate-ai-connector-webllm' ) );
 					return;
 				}
-				const adapter = await navigator.gpu.requestAdapter();
-				if ( adapter && adapter.info ) {
-					setAdapterInfo( adapter.info );
+				if ( ! diag.adapterAvailable ) {
+					setError( __( 'WebGPU is available but no GPU adapter was found. Your GPU may be blocklisted — see the troubleshooting steps below.', 'ultimate-ai-connector-webllm' ) );
+					return;
 				}
-				if ( adapter && adapter.features && typeof adapter.features.has === 'function' ) {
-					setHasShaderF16( adapter.features.has( 'shader-f16' ) );
+				if ( diag.isSoftwareAdapter ) {
+					setError( __( 'WebGPU is using software rendering instead of your GPU. Inference will be extremely slow — see the troubleshooting steps below.', 'ultimate-ai-connector-webllm' ) );
+				}
+
+				// Read adapter info for display.
+				if ( navigator.gpu ) {
+					const adapter = await navigator.gpu.requestAdapter();
+					if ( adapter && adapter.info ) {
+						setAdapterInfo( adapter.info );
+					}
 				}
 			} catch ( e ) {
 				// non-fatal
@@ -319,6 +336,14 @@ function App() {
 		} catch ( e ) {
 			setStatus( 'idle' );
 			setError( ( e && e.message ) || String( e ) );
+			// Check if the web-llm error has specific troubleshooting guidance.
+			const errorDiag = diagnoseWebLlmError( e );
+			if ( errorDiag ) {
+				setGpuDiag( ( prev ) => ( {
+					...( prev || {} ),
+					issues: [ errorDiag, ...( prev?.issues || [] ).filter( ( i ) => i.id !== errorDiag.id ) ],
+				} ) );
+			}
 		}
 	}, [ modelId ] );
 
@@ -470,6 +495,44 @@ function App() {
 		value: m.model_id || m.id,
 	} ) );
 
+	// Render a collapsible troubleshooting panel when issues are detected.
+	const troubleshootingPanel = hasIssues( gpuDiag ) && h( 'details', {
+		style: {
+			marginTop: 4,
+			padding: '10px 14px',
+			background: '#fff8e1',
+			borderLeft: '4px solid #f0b849',
+			borderRadius: 2,
+			fontSize: 13,
+		},
+		open: ! gpuDiag.adapterAvailable || ! gpuDiag.webgpuApiPresent,
+	},
+		h( 'summary', { style: { cursor: 'pointer', fontWeight: 600 } },
+			__( 'Troubleshooting: WebGPU setup', 'ultimate-ai-connector-webllm' )
+		),
+		gpuDiag.issues.map( ( issue, idx ) =>
+			h( 'div', { key: idx, style: { marginTop: 10 } },
+				h( 'strong', { style: { color: issue.severity === 'error' ? '#cc1818' : '#996800' } }, issue.title ),
+				h( 'p', { style: { margin: '4px 0' } }, issue.description ),
+				issue.steps && h( 'ol', { style: { margin: '6px 0 0 0', paddingLeft: 20 } },
+					issue.steps.map( ( step, si ) =>
+						h( 'li', {
+							key: si,
+							style: {
+								marginBottom: 4,
+								...(
+									step.type === 'chrome-flag'
+										? { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }
+										: {}
+								),
+							},
+						}, step.text )
+					)
+				)
+			)
+		)
+	);
+
 	if ( libLoading ) {
 		return h( Card, null,
 			h( CardBody, null,
@@ -518,9 +581,11 @@ function App() {
 						: h( Spinner, null )
 				),
 
-				error && h( Notice, { status: 'error', isDismissible: false }, error ),
+			error && h( Notice, { status: 'error', isDismissible: false }, error ),
 
-				h( HStack, { justify: 'flex-start', spacing: 3 },
+			troubleshootingPanel,
+
+			h( HStack, { justify: 'flex-start', spacing: 3 },
 					status !== 'ready' && h( Button, {
 						variant: 'primary',
 						onClick: loadModel,
