@@ -1,6 +1,6 @@
 # AGENTS.md — Ultimate AI Connector for WebLLM
 
-WordPress plugin that registers a WebLLM provider with the bundled WordPress AI Client SDK. LLM inference runs entirely in the user's browser on WebGPU via `@mlc-ai/web-llm`. The WordPress site is a broker — a persistent admin worker tab acts as the GPU, and any logged-in device on the install can submit prompts that get served by that tab.
+WordPress plugin that registers a WebLLM provider with the bundled WordPress AI Client SDK. LLM inference runs entirely in the user's browser on WebGPU via `@mlc-ai/web-llm`. The WordPress site is a broker — a SharedWorker (Chrome 124+/Edge 124+) or a dedicated admin tab (fallback) acts as the GPU, and any logged-in device on the install can submit prompts that get served by that worker.
 
 No third-party API. No API keys. No per-token cost. Model weights live in the browser cache.
 
@@ -18,21 +18,28 @@ No third-party API. No API keys. No per-token cost. Model weights live in the br
 
 ```
 PHP AI Client SDK ──▶ WebLlmProvider / WebLlmModel
-                       │  createRequest() → POST /wp-json/webllm/v1/chat/completions
+                       │  POST /wp-json/webllm/v1/chat/completions
                        ▼
              REST broker (inc/rest-api.php)
-                       │ enqueue job
-                       │ long-poll wait for result (raw $wpdb + COMMIT per tick)
-                       ▼
-             Browser worker tab (Tools → WebLLM Worker)
-                       │ GET /jobs/next (long-poll)
-                       │ engine.chat.completions.create(...)
-                       │ POST /jobs/{id}/result
-                       ▼
-             REST broker returns OpenAI-shaped response → SDK
+                       │ enqueue job, long-poll
+                       │ (raw $wpdb + COMMIT per tick)
+           ┌───────────┴───────────┐
+           ▼                       ▼
+     SharedWorker              Dedicated tab
+     (Chrome 124+,             (fallback for older
+      every admin              browsers and manual
+      tab shares one)          override)
+           │                       │
+           │  Both run              │
+           │  @mlc-ai/web-llm       │
+           │  on WebGPU             │
+           ▼                       ▼
+       GPU inference → POST /jobs/{id}/result → broker → SDK
 ```
 
 The broker bypasses WordPress's option/transient memoization and MySQL's REPEATABLE READ isolation with raw `$wpdb` queries plus an explicit `COMMIT` between iterations — otherwise the long-poll loop would freeze on its first read.
+
+The SharedWorker is spawned by the floating widget injected into every wp-admin page. It persists as long as at least one wp-admin tab is open in the same browser profile. The dedicated-tab fallback (Tools → WebLLM Worker) is still available for browsers without SharedWorker + WebGPU support.
 
 ## Directory Structure
 
@@ -108,9 +115,9 @@ The `/jobs/{id}/result` handler reads `$request->get_url_params()['id']` directl
 
 ## Distribution
 
-`.distignore` controls what composer excludes from the release archive. Current excludes: `.git`, `.github`, `.gitignore`, `.distignore`, `.idea`, `.vscode`, `.phpunit.result.cache`, `.DS_Store`, `node_modules`, `src`, `tests`, `phpunit.xml.dist`, `phpcs.xml.dist`, `webpack.config.js`, `package.json`, `package-lock.json`, `composer.lock`, `TODO.md`.
+`.distignore` controls what composer excludes from the release archive. Current excludes: `.git`, `.github`, `.gitignore`, `.distignore`, `.idea`, `.vscode`, `.phpunit.result.cache`, `.DS_Store`, `node_modules`, `src`, `tests`, `phpunit.xml.dist`, `phpcs.xml.dist`, `webpack.config.js`, `package.json`, `package-lock.json`, `composer.lock`, `TODO.md`, `AGENTS.md`, `.agents/`, `.aidevops.json`, `todo/`, `.beads/`, `wp-cli.yml`.
 
-**Note**: `.agents/`, `.aidevops.json`, `todo/`, and `AGENTS.md` should also be excluded from distribution — see `.distignore`.
+The `composer.json → archive.exclude` list must be kept in sync with `.distignore`.
 
 ## Known Limitations
 
