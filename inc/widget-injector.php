@@ -58,9 +58,15 @@ function get_localized_widget_config(): array {
 		// Auto-load the engine when a pending job is detected (t014/t015).
 		// Distinct from `widgetAutostart` which loads on page-ready.
 		'autoStart'                    => (bool) get_option( 'webllm_auto_start', false ),
-		'widgetBundleUrl'              => plugins_url( 'build/floating-widget.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
-		'middlewareBundleUrl'          => plugins_url( 'build/apifetch-middleware.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
-		'sharedWorkerUrl'              => plugins_url( 'build/shared-worker.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
+		// Append the plugin version to every bundle URL so browser and
+		// SharedWorker caches invalidate on upgrade. SharedWorkers are
+		// keyed by script URL — without this query-param, Chrome reuses
+		// the old worker script across rebuilds and changes to
+		// src/shared-worker.js only take effect after chrome://inspect
+		// terminate-and-reload or a manual service worker reset.
+		'widgetBundleUrl'              => add_query_arg( 'v', ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION, plugins_url( 'build/floating-widget.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) ),
+		'middlewareBundleUrl'          => add_query_arg( 'v', ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION, plugins_url( 'build/apifetch-middleware.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) ),
+		'sharedWorkerUrl'              => add_query_arg( 'v', ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION, plugins_url( 'build/shared-worker.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) ),
 		'defaultModel'                 => (string) get_option( 'webllm_default_model', '' ),
 		'knownModelIds'                => $known_models,
 		'isPreferredForTextGeneration' => $is_preferred,

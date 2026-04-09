@@ -586,12 +586,19 @@ function WidgetRoot() {
 	} );
 	const pendingPromiseRef = useRef( null );
 	const autoStartAttemptedRef = useRef( false );
+	// Ref mirror of `hardware` so the `needs-load` subscribe callback
+	// always sees the latest detected GPU info (its closure over the
+	// state is frozen to the value at subscribe time).
+	const hardwareRef = useRef( { modelId: null, gpuName: 'Detecting…', vramHintGb: 0 } );
 
 	// Detect hardware once on mount.
 	useEffect( () => {
 		let cancelled = false;
 		detectHardware().then( ( hw ) => {
-			if ( ! cancelled ) setHardware( hw );
+			if ( ! cancelled ) {
+				setHardware( hw );
+				hardwareRef.current = hw;
+			}
 		} );
 		return () => {
 			cancelled = true;
@@ -660,9 +667,14 @@ function WidgetRoot() {
 			if ( state?.state === 'ready' || state?.state === 'loading' ) return;
 			autoStartAttemptedRef.current = true;
 			if ( CFG.autoStart ) {
-				// Silent path — kick off the load directly. The modal stays
-				// closed; users see progress via the admin-bar dot + label.
-				client.loadModel( null ).catch( () => undefined );
+				// Silent path — kick off the load directly. Prefer the
+				// admin-configured default model so user intent is honoured;
+				// fall back to the SharedWorker autoPick heuristic (null)
+				// only when no default is set. The modal stays closed; users
+				// see progress via the admin-bar dot + label.
+				const preferred =
+					CFG.defaultModel || hardwareRef.current?.modelId || null;
+				client.loadModel( preferred ).catch( () => undefined );
 			} else {
 				// Prompt path — same as promptAndLoad() but without an
 				// awaited Promise (the triggering request is already
