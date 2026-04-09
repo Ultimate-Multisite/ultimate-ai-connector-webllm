@@ -44,7 +44,7 @@ function Badge( { online } ) {
 	);
 }
 
-function WebLlmConnectorCard( { label, description } ) {
+function WebLlmConnectorCard( { label, description, logo } ) {
 	const [ isExpanded, setIsExpanded ] = useState( false );
 	const [ isLoading, setIsLoading ] = useState( true );
 	const [ isSaving, setIsSaving ] = useState( false );
@@ -361,7 +361,7 @@ function WebLlmConnectorCard( { label, description } ) {
 	return (
 		<ConnectorItem
 			className="connector-item--ultimate-ai-connector-webllm"
-			icon={ <Logo /> }
+			logo={ logo || <Logo /> }
 			name={ label }
 			description={ description }
 			actionArea={ actionArea }
@@ -377,6 +377,7 @@ const CONFIG = {
 	description: __(
 		'Run LLM inference entirely in the user\'s browser via WebGPU + WebLLM. A persistent worker tab provides the GPU; the WordPress site brokers requests so any logged-in device can use it.'
 	),
+	logo: <Logo />,
 	render: WebLlmConnectorCard,
 };
 
