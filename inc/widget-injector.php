@@ -186,7 +186,7 @@ function register_admin_bar_node( $bar ): void {
 			'parent' => 'webllm-status',
 			'id'     => 'webllm-status-settings',
 			'title'  => __( 'Connector settings', 'ultimate-ai-connector-webllm' ),
-			'href'   => admin_url( 'options-general.php?page=ultimate-ai-connector-webllm' ),
+			'href'   => admin_url( 'options-connectors.php?page=ultimate-ai-connector-webllm' ),
 		]
 	);
 }
