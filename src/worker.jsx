@@ -100,14 +100,26 @@ async function autoPickModel( list ) {
 	const unsupported = ( id ) => ! hasShaderF16 && /f16|BF16/i.test( id || '' );
 
 	const familyRank = ( id ) => {
-		if ( /Llama-3\.2.*Instruct/i.test( id ) ) return 6;
-		if ( /Llama-3\.1.*Instruct/i.test( id ) ) return 5;
-		if ( /Qwen2\.5.*Instruct/i.test( id ) ) return 4;
-		if ( /Phi-3.*mini.*Instruct/i.test( id ) ) return 3;
-		if ( /SmolLM2.*Instruct/i.test( id ) ) return 2;
-		if ( /TinyLlama.*Chat/i.test( id ) ) return 1;
+		if ( /^Qwen3-/i.test( id ) )                  return 10;
+		if ( /DeepSeek-R1/i.test( id ) )               return 9;
+		if ( /Ministral.*Instruct/i.test( id ) )       return 8;
+		if ( /Hermes-3/i.test( id ) )                  return 7;
+		if ( /Llama-3\.2.*Instruct/i.test( id ) )      return 6;
+		if ( /Llama-3\.1.*Instruct/i.test( id ) )      return 5;
+		if ( /Qwen2\.5-(?!Coder|Math).*Instruct/i.test( id ) ) return 4;
+		if ( /gemma-2-.*-it/i.test( id ) )             return 3;
+		if ( /Phi-3.*instruct/i.test( id ) )           return 2;
+		if ( /SmolLM2.*Instruct/i.test( id ) )         return 1;
 		return 0;
 	};
+
+	// Chat-capable models use various naming conventions: "Instruct",
+	// "Chat", "-it" (Gemma), "R1-Distill" (DeepSeek), "Hermes", "Qwen3"
+	// (no suffix), "Ministral-*-Instruct", "Reasoning", "zephyr". Match
+	// broadly and rely on the embed/reranker/base exclusion to filter
+	// non-chat models.
+	const isChatCapable = ( id ) =>
+		/instruct|chat|-it-|R1-Distill|Hermes|^Qwen3-|Ministral.*(?:Instruct|Reasoning)|zephyr/i.test( id );
 
 	const candidates = list
 		.map( ( m ) => ( {
@@ -117,16 +129,16 @@ async function autoPickModel( list ) {
 		.filter(
 			( m ) =>
 				m.id &&
-				! /embed|reranker/i.test( m.id ) &&
-				/instruct|chat/i.test( m.id ) &&
+				! /embed|reranker|Base-\d/i.test( m.id ) &&
+				isChatCapable( m.id ) &&
 				! unsupported( m.id ) &&
 				m.vram <= budgetMB
 		);
 
 	if ( candidates.length === 0 ) {
 		// Nothing fits the budget — fall back to absolute smallest
-		// supported instruct model.
-		const anyInstruct = list
+		// supported chat model.
+		const anyChat = list
 			.map( ( m ) => ( {
 				id: m.model_id || m.id,
 				vram: typeof m.vram_required_MB === 'number' ? m.vram_required_MB : 99999,
@@ -134,12 +146,12 @@ async function autoPickModel( list ) {
 			.filter(
 				( m ) =>
 					m.id &&
-					! /embed|reranker/i.test( m.id ) &&
-					/instruct|chat/i.test( m.id ) &&
+					! /embed|reranker|Base-\d/i.test( m.id ) &&
+					isChatCapable( m.id ) &&
 					! unsupported( m.id )
 			)
 			.sort( ( a, b ) => a.vram - b.vram );
-		return anyInstruct[ 0 ]?.id || '';
+		return anyChat[ 0 ]?.id || '';
 	}
 
 	// Prefer newer family, then larger model within the family (bigger = smarter).
