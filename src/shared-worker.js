@@ -431,16 +431,91 @@ function stopIdlePeeking() {
 }
 
 /**
+ * Flatten an OpenAI content-parts array to a plain string.
+ *
+ * WebLLM's non-VLM models reject `[{type:'text', text:'...'}]` payloads —
+ * they only accept plain strings. The WP AI SDK always sends parts arrays,
+ * so we strip everything back to concatenated text. Mirrors the
+ * normalisation in src/worker.jsx so both runtimes handle SDK input the
+ * same way.
+ *
+ * @param {string|Array|Object} c
+ * @return {string}
+ */
+function flattenContent( c ) {
+	if ( typeof c === 'string' ) {
+		return c;
+	}
+	if ( Array.isArray( c ) ) {
+		return c
+			.map( ( p ) => {
+				if ( typeof p === 'string' ) {
+					return p;
+				}
+				if ( p && typeof p.text === 'string' ) {
+					return p.text;
+				}
+				return '';
+			} )
+			.filter( Boolean )
+			.join( '' );
+	}
+	if ( c && typeof c.text === 'string' ) {
+		return c.text;
+	}
+	return '';
+}
+
+/**
+ * Normalise the SDK payload to what WebLLM actually supports.
+ *
+ * The WP AI Client SDK forwards OpenAI-compatible fields that WebLLM
+ * doesn't all accept; strip the unsupported ones, flatten content parts,
+ * and force the currently-loaded model id on the request.
+ *
+ * @param {Object} req Raw request from the broker job.
+ * @return {Object}    Normalised payload for engine.chat.completions.create().
+ */
+function normaliseRequest( req ) {
+	const messages = Array.isArray( req?.messages )
+		? req.messages.map( ( m ) => ( {
+				role: m.role,
+				content: flattenContent( m.content ),
+		  } ) )
+		: [];
+	return {
+		messages,
+		model: currentModelId || req?.model,
+		stream: false,
+		...( typeof req?.temperature === 'number' && { temperature: req.temperature } ),
+		...( typeof req?.top_p === 'number' && { top_p: req.top_p } ),
+		...( typeof req?.max_tokens === 'number' && { max_tokens: req.max_tokens } ),
+		...( typeof req?.frequency_penalty === 'number' && {
+			frequency_penalty: req.frequency_penalty,
+		} ),
+		...( typeof req?.presence_penalty === 'number' && {
+			presence_penalty: req.presence_penalty,
+		} ),
+	};
+}
+
+/**
  * Execute a single inference job and POST the result back to the broker.
  *
  * Transitions: ready → busy → ready (or error on failure).
+ *
+ * The result is POSTed **flat** (not wrapped in `{ result }`) so it
+ * matches the dedicated-tab worker's format — the broker stores the
+ * body verbatim and the SDK expects `id/choices/model/...` at the top
+ * level of the response.
  *
  * @param {Object} job Job descriptor from /jobs/next: { id, request }
  */
 async function runJob( job ) {
 	setState( 'busy' );
 	try {
-		const result = await engine.chat.completions.create( job.request );
+		const payload = normaliseRequest( job.request || job );
+		const result  = await engine.chat.completions.create( payload );
 		// eslint-disable-next-line no-undef
 		await fetch( `/wp-json/webllm/v1/jobs/${ job.id }/result`, {
 			method: 'POST',
@@ -449,7 +524,7 @@ async function runJob( job ) {
 				'Content-Type': 'application/json',
 				...( restNonce ? { 'X-WP-Nonce': restNonce } : {} ),
 			},
-			body: JSON.stringify( { result } ),
+			body: JSON.stringify( result ),
 		} );
 	} catch ( err ) {
 		// Report job error back to broker so it can unblock the waiting client.
