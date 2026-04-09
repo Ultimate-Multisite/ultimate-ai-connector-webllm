@@ -36,6 +36,7 @@
  */
 
 import { FLOATING_WIDGET_CSS } from './floating-widget-styles';
+import { diagnoseWebGpu, diagnoseWebLlmError, hasIssues } from './webgpu-troubleshooter';
 
 const {
 	createElement: h,
@@ -205,7 +206,13 @@ function createSharedWorkerClient() {
  * @return {Promise<{modelId: string|null, gpuName: string, vramHintGb: number}>}
  */
 async function detectHardware() {
-	const result = { modelId: null, gpuName: 'Unknown', vramHintGb: 0 };
+	const result = { modelId: null, gpuName: 'Unknown', vramHintGb: 0, gpuDiag: null };
+
+	// Run WebGPU diagnostics.
+	try {
+		result.gpuDiag = await diagnoseWebGpu();
+	} catch ( _ ) {}
+
 	if ( ! navigator.gpu ) {
 		return result;
 	}
@@ -408,6 +415,7 @@ function StartModal( {
 	hardware,
 	progress,
 	error,
+	gpuDiag,
 	onStart,
 	onCancel,
 	canStart,
@@ -531,15 +539,48 @@ function StartModal( {
 							progressText
 						)
 				),
-			error &&
-				h(
-					'div',
-					{ className: 'webllm-widget-error', role: 'alert' },
-					error
-				),
+		error &&
 			h(
 				'div',
-				{ className: 'webllm-widget-modal-actions' },
+				{ className: 'webllm-widget-error', role: 'alert' },
+				error
+			),
+		hasIssues( gpuDiag ) &&
+			h(
+				'details',
+				{
+					className: 'webllm-widget-troubleshooting',
+					open: gpuDiag && ( ! gpuDiag.adapterAvailable || ! gpuDiag.webgpuApiPresent ),
+					style: {
+						marginTop: 8,
+						padding: '8px 12px',
+						background: '#fff8e1',
+						borderLeft: '3px solid #f0b849',
+						borderRadius: 2,
+						fontSize: 12,
+						maxHeight: 200,
+						overflowY: 'auto',
+					},
+				},
+				h( 'summary', { style: { cursor: 'pointer', fontWeight: 600, fontSize: 13 } },
+					'Troubleshooting'
+				),
+				gpuDiag.issues.map( ( issue, idx ) =>
+					h( 'div', { key: idx, style: { marginTop: 6 } },
+						h( 'strong', { style: { color: issue.severity === 'error' ? '#cc1818' : '#996800' } },
+							issue.title
+						),
+						issue.steps && h( 'ol', { style: { margin: '4px 0 0 0', paddingLeft: 18, lineHeight: 1.5 } },
+							issue.steps.map( ( step, si ) =>
+								h( 'li', { key: si, style: { marginBottom: 2 } }, step.text )
+							)
+						)
+					)
+				)
+			),
+		h(
+			'div',
+			{ className: 'webllm-widget-modal-actions' },
 				h(
 					'button',
 					{
@@ -759,6 +800,7 @@ function WidgetRoot() {
 				hardware,
 				progress: state?.progress,
 				error: state?.error,
+				gpuDiag: hardware.gpuDiag || null,
 				onStart: handleStart,
 				onCancel: handleCancel,
 				canStart,

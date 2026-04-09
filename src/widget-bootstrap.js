@@ -32,14 +32,39 @@
 	const hasSharedWorker = typeof SharedWorker !== 'undefined';
 	const hasWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
 
+	/**
+	 * Update the admin-bar node to show an unsupported state with a reason,
+	 * so users see feedback instead of a permanently-grey dot.
+	 *
+	 * @param {string} reason Short reason string.
+	 */
+	var showUnsupported = function ( reason ) {
+		var root = document.getElementById( 'wp-admin-bar-webllm-status' );
+		if ( ! root ) {
+			return;
+		}
+		var dot = root.querySelector( '.webllm-admin-bar-dot' );
+		if ( dot ) {
+			dot.setAttribute( 'data-state', 'error' );
+		}
+		var label = root.querySelector( '.webllm-admin-bar-label' );
+		if ( label ) {
+			label.textContent = reason;
+		}
+		// Add a title attribute so hover shows more detail.
+		root.title = reason + '. Use Tools \u2192 WebLLM Worker for dedicated-tab fallback, or check browser requirements in the WebGPU troubleshooting guide.';
+	};
+
 	if ( ! hasSharedWorker ) {
 		// eslint-disable-next-line no-console
-		console.debug( '[WebLLM] SharedWorker not supported; widget disabled. Use Tools → WebLLM Worker for dedicated-tab fallback.' );
+		console.debug( '[WebLLM] SharedWorker not supported; widget disabled. Use Tools \u2192 WebLLM Worker for dedicated-tab fallback.' );
+		showUnsupported( 'WebLLM: SharedWorker not supported' );
 		return;
 	}
 	if ( ! hasWebGpu ) {
 		// eslint-disable-next-line no-console
-		console.debug( '[WebLLM] WebGPU not supported; widget disabled.' );
+		console.debug( '[WebLLM] WebGPU not supported; widget disabled. Check chrome://flags for #enable-unsafe-webgpu, #enable-vulkan, #ignore-gpu-blocklist.' );
+		showUnsupported( 'WebLLM: WebGPU not available' );
 		return;
 	}
 
