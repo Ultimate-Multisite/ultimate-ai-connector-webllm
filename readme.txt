@@ -24,13 +24,21 @@ In Chrome 124+ and Edge 124+, a SharedWorker loads the model automatically when 
 == Changelog ==
 
 = 1.1.0 =
-* NEW: Zero-config SharedWorker runtime — the LLM survives page navigation and shows a small floating icon in the corner of admin pages. No more keeping a dedicated worker tab open.
-* NEW: Auto-detected recommended model based on hardware capabilities.
-* NEW: apiFetch middleware intercepts AI requests from WordPress/ai experiments and shows a friendly start modal when the model isn't loaded yet.
-* NEW: Settings panel for the runtime mode (auto / shared-worker / dedicated-tab / disabled).
-* NEW: Hooks into `wpai_preferred_text_models` filter so AI Experiments (WordPress/ai plugin) actually routes through WebLLM when configured.
-* FALLBACK: Older browsers without SharedWorker + WebGPU support automatically fall back to the existing Tools → WebLLM Worker (Manual mode) page.
-* REQUIRES: Chrome 124+ or Edge 124+ for the SharedWorker runtime. Older browsers use the fallback.
+Released on 2026-04-09
+
+* New: zero-config SharedWorker runtime — the LLM survives page navigation and shows a floating widget in the corner of admin pages. No more keeping a dedicated worker tab open.
+* New: floating chat widget with admin-bar status indicator — any logged-in user can prompt the browser-side LLM directly from the front end.
+* New: apiFetch middleware interceptor — WordPress REST requests that match the AI Client SDK pattern are transparently routed to the local WebLLM broker, no loopback HTTP round-trip needed. Shows a friendly start modal when the model is not loaded yet.
+* New: widget settings UI in the Connector panel for toggling the chat widget and configuring auto-prompt behaviour.
+* New: auto-detected recommended model based on hardware capabilities.
+* New: settings panel for the runtime mode (auto / shared-worker / dedicated-tab / disabled).
+* New: hooks into wpai_preferred_text_models filter so AI Experiments (WordPress/ai plugin) routes through WebLLM when configured.
+* Fix: force IndexedDB cache backend so model weight downloads survive HuggingFace xet CDN redirects that break the default Cache API path.
+* Fix: skip the context_window KV-cache override for embedding models (they have no decoder and the override caused a runtime error).
+* Fix: advertise the cold-start candidate model in /webllm/v1/models before the worker tab has loaded, so SDK consumers see a model immediately.
+* Improved: cache-busting, content normalisation, and hardware-reference fixes surfaced during end-to-end testing.
+* Fallback: older browsers without SharedWorker + WebGPU support automatically fall back to the existing Tools → WebLLM Worker (Manual mode) page.
+* Requires: Chrome 124+ or Edge 124+ for the SharedWorker runtime. Older browsers use the fallback.
 
 = 1.0.2 =
 * Fix: re-assert our `registerConnector()` call across multiple ticks (microtask + 0/50/250/1000ms) so the WP core `registerDefaultConnectors()` auto-register can't clobber our custom card with the generic API-key UI. The two scripts can run in either order depending on import-graph resolution; this guarantees we end up last. Resolves the regression where the WebLLM connector card showed an "API Key" input field instead of the worker-status panel.

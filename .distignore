@@ -23,3 +23,9 @@ todo
 .aidevops.json
 .beads
 wp-cli.yml
+.playwright-mcp
+cdp-test.mjs
+drive.mjs
+prompt.mjs
+wp-scripts
+VERSION

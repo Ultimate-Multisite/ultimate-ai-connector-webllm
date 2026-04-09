@@ -12,3 +12,10 @@
 # Local-only tooling state
 .beads/
 .agents/loop-state/
+
+# Local dev/test artifacts
+.playwright-mcp/
+cdp-test.mjs
+drive.mjs
+prompt.mjs
+wp-scripts

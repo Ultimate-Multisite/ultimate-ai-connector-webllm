@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	return;
 }
 
-define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION', '1.0.2' );
+define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION', '1.1.0' );
 define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_FILE', __FILE__ );
 define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_DIR', __DIR__ );
 
