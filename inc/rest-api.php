@@ -239,15 +239,25 @@ function rest_chat_completions( \WP_REST_Request $request ) {
  *   2. The configured `webllm_default_model` option, if set and present in
  *      the worker's reported catalog.
  *   3. The first entry from the cached worker catalog (auto-pick).
+ *   4. The configured `webllm_default_model` even without a cache (admin
+ *      set it but the worker hasn't registered yet).
+ *   5. A hardcoded cold-start placeholder so the SDK never sees an empty
+ *      model list.
  *
  * We deliberately never advertise the full `prebuiltAppConfig.model_list`:
  * the AI SDK's capability-matching treats every listed model as usable and
  * would happily route a request to a model that's not loaded. Exposing a
  * single candidate is safe because the apiFetch middleware intercepts the
  * request in the browser and calls `webllmWidget.promptAndLoad()` to bring
- * the engine online before the broker relays the job. Without a cold-start
- * candidate the PHP SDK rejects the prompt during provider-side capability
- * matching — long before any JS middleware can run.
+ * the engine online before the broker relays the job.
+ *
+ * Steps 4-5 are critical: without a cold-start candidate the PHP SDK
+ * rejects the prompt during provider-side capability matching — "No models
+ * found for provider … that support text_generation" — long before any JS
+ * middleware can run. The placeholder ID is never sent to the engine; the
+ * SharedWorker's `autoPickModel()` selects the real model at load time.
+ * The broker's `rest_chat_completions` enqueues the job unconditionally
+ * and the idle-peek loop / apiFetch middleware handle the cold-start UX.
  */
 function rest_list_models( \WP_REST_Request $request ) {
 	$candidate = Job_Queue::get_active_model();
@@ -266,13 +276,25 @@ function rest_list_models( \WP_REST_Request $request ) {
 			$candidate = $default;
 		} elseif ( ! empty( $cache_ids ) ) {
 			$candidate = $cache_ids[0];
+		} elseif ( '' !== $default ) {
+			// Admin configured a default but the worker hasn't registered
+			// yet (no cache). Trust the admin's choice as the cold-start
+			// candidate — it will be validated when the worker loads.
+			$candidate = $default;
 		}
 	}
 
-	$data = [];
-	if ( '' !== $candidate ) {
-		$data[] = [ 'id' => $candidate, 'name' => $candidate ];
+	// Always advertise at least one model so the SDK's capability matcher
+	// passes. The apiFetch middleware and SharedWorker idle-peek loop
+	// handle the actual cold-start (prompting the user or auto-loading).
+	// Without this fallback the SDK rejects every request with "No models
+	// found for provider … that support text_generation" before any
+	// browser-side code can intervene.
+	if ( '' === $candidate ) {
+		$candidate = 'webllm-cold-start-placeholder';
 	}
+
+	$data = [ [ 'id' => $candidate, 'name' => $candidate ] ];
 
 	return rest_ensure_response(
 		[
