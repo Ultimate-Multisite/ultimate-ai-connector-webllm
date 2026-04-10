@@ -104,7 +104,7 @@ async function autoPickModel( list ) {
 	const familyRank = ( id ) => {
 		if ( /^Qwen3-/i.test( id ) )                  return 10;
 		if ( /DeepSeek-R1/i.test( id ) )               return 9;
-		if ( /Ministral.*Instruct/i.test( id ) )       return 8;
+		if ( /Ministral.*(?:Instruct|Reasoning)/i.test( id ) ) return 8;
 		if ( /Hermes-3/i.test( id ) )                  return 7;
 		if ( /Llama-3\.2.*Instruct/i.test( id ) )      return 6;
 		if ( /Llama-3\.1.*Instruct/i.test( id ) )      return 5;
