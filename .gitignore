@@ -1,6 +1,5 @@
 /node_modules/
 /vendor/
-/build/
 /ultimate-ai-connector-webllm.zip
 *.log
 .DS_Store
