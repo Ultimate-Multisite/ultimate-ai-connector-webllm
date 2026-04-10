@@ -4,7 +4,7 @@ Tags: ai, webllm, webgpu, llm, on-device
 Requires at least: 7.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,16 @@ In Chrome 124+ and Edge 124+, a SharedWorker loads the model automatically when 
 * WordPress 7.0+ (bundled AI Client SDK).
 
 == Changelog ==
+
+= 1.2.0 =
+Released on 2026-04-09
+
+* New: auto-pick heuristic now prefers newer model families, so the best available model is selected by default.
+* New: WebGPU troubleshooting diagnostics panel — shown automatically when hardware or driver problems are detected.
+* Fix: connector settings link now points to the correct options-connectors.php URL.
+* Fix: cold-start model is always advertised so SDK capability matching passes before the worker has loaded.
+* Fix: Ministral Reasoning models ranked at the same level as Instruct variants for consistent model selection.
+* Improved: build/ directory committed for WordPress Playground git:directory support.
 
 = 1.1.0 =
 Released on 2026-04-09
