@@ -99,48 +99,48 @@ if ( ! apiFetch || typeof apiFetch.use !== 'function' ) {
 	console.warn( '[WebLLM] wp.apiFetch unavailable; middleware not registered.' );
 } else {
 	apiFetch.use( async ( options, next ) => {
-	const path = options.path || '';
-	const data = options.data || null;
+		const path = options.path || '';
+		const data = options.data || null;
 
-	const isOurs =
-		isWebLlmGenerateRequest( path, data ) || isWebLlmAbilityRequest( path );
+		const isOurs =
+			isWebLlmGenerateRequest( path, data ) || isWebLlmAbilityRequest( path );
 
-	if ( ! isOurs ) {
-		return next( options );
-	}
+		if ( ! isOurs ) {
+			return next( options );
+		}
 
-	// Widget not mounted yet (early page load, before footer bootstrap
-	// finishes). Fall through — the server-side 503 path is still a safety
-	// net if the broker has no worker attached.
-	const widget = window.webllmWidget;
-	if ( ! widget ) {
-		return next( options );
-	}
+		// Widget not mounted yet (early page load, before footer bootstrap
+		// finishes). Fall through — the server-side 503 path is still a safety
+		// net if the broker has no worker attached.
+		const widget = window.webllmWidget;
+		if ( ! widget ) {
+			return next( options );
+		}
 
-	let status;
-	try {
-		status = await widget.getStatus();
-	} catch ( e ) {
-		return next( options );
-	}
+		let status;
+		try {
+			status = await widget.getStatus();
+		} catch ( e ) {
+			return next( options );
+		}
 
-	if ( status && status.state === 'ready' ) {
-		return next( options );
-	}
+		if ( status && status.state === 'ready' ) {
+			return next( options );
+		}
 
-	try {
-		await widget.promptAndLoad();
-		return next( options );
-	} catch ( err ) {
-		const errorMessage =
-			( err && err.message ) || 'WebLLM model is not loaded.';
-		// WP_Error-shaped rejection so the editor renders a clean notice
-		// instead of `[object Object]`.
-		return Promise.reject( {
-			code: 'webllm_not_ready',
-			message: errorMessage,
-			data: { status: 503 },
-		} );
-	}
-} );
+		try {
+			await widget.promptAndLoad();
+			return next( options );
+		} catch ( err ) {
+			const errorMessage =
+				( err && err.message ) || 'WebLLM model is not loaded.';
+			// WP_Error-shaped rejection so the editor renders a clean notice
+			// instead of `[object Object]`.
+			return Promise.reject( {
+				code: 'webllm_not_ready',
+				message: errorMessage,
+				data: { status: 503 },
+			} );
+		}
+	} );
 }
