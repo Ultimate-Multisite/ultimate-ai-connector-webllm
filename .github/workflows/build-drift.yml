@@ -1,0 +1,40 @@
+name: Build Drift Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-drift:
+    name: Detect build/ drift
+    runs-on: ubuntu-latest
+    if: github.repository == 'Ultimate-Multisite/ultimate-ai-connector-webllm'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build -- --no-progress 2>&1 | grep -v "^asset\|^chunk\|^webpack\|^\s*$" || true
+
+      - name: Check for uncommitted changes in build/
+        run: |
+          if ! git diff --quiet --exit-code -- build/; then
+            echo "::error::build/ is out of sync with src/. Run 'npm run build' locally and commit the result."
+            git diff --stat -- build/
+            exit 1
+          fi
+          echo "build/ is in sync with src/."
