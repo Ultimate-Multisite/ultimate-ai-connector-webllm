@@ -493,11 +493,11 @@ function App() {
 						pushLog( `result POST threw: ${ ( e && e.message ) || e }` );
 					}
 					setJobsServed( ( n ) => n + 1 );
-			} catch ( e ) {
-				pushLog( `loop error: ${ ( e && e.message ) || e }` );
-				retryDelay = POLL_DELAY_BASE;
-				await new Promise( ( r ) => setTimeout( r, 1000 ) );
-			}
+				} catch ( e ) {
+					pushLog( `loop error: ${ ( e && e.message ) || e }` );
+					retryDelay = POLL_DELAY_BASE;
+					await new Promise( ( r ) => setTimeout( r, 1000 ) );
+				}
 			}
 			pushLog( 'polling loop stopped' );
 		};
