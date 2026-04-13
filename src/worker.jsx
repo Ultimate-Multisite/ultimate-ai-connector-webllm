@@ -384,21 +384,35 @@ function App() {
 
 		const loop = async () => {
 			pushLog( 'polling loop started' );
+			// Exponential backoff for idle polls (204 / no job).
+			// Starts at 1 s, doubles on each consecutive idle response, caps at 30 s.
+			// Resets to base immediately when a real job arrives or an error occurs.
+			const POLL_DELAY_BASE = 1000;
+			const POLL_DELAY_MAX  = 30000;
+			let retryDelay = POLL_DELAY_BASE;
+
 			while ( ! cancelled && ! stopRef.current ) {
 				try {
 					const res = await api( '/jobs/next', { method: 'GET' } );
 					if ( res.status === 204 ) {
+						await new Promise( ( r ) => setTimeout( r, retryDelay ) );
+						retryDelay = Math.min( retryDelay * 2, POLL_DELAY_MAX );
 						continue;
 					}
 					if ( ! res.ok ) {
 						pushLog( `jobs/next returned HTTP ${ res.status }` );
+						retryDelay = POLL_DELAY_BASE;
 						await new Promise( ( r ) => setTimeout( r, 1000 ) );
 						continue;
 					}
 					const job = await res.json();
 					if ( ! job || ! job.id ) {
+						await new Promise( ( r ) => setTimeout( r, retryDelay ) );
+						retryDelay = Math.min( retryDelay * 2, POLL_DELAY_MAX );
 						continue;
 					}
+					// Real job received — reset backoff.
+					retryDelay = POLL_DELAY_BASE;
 					if ( job.type !== 'chat' ) {
 						pushLog( `unknown job type: ${ job.type }` );
 						await api( `/jobs/${ job.id }/result`, {
@@ -479,10 +493,11 @@ function App() {
 						pushLog( `result POST threw: ${ ( e && e.message ) || e }` );
 					}
 					setJobsServed( ( n ) => n + 1 );
-				} catch ( e ) {
-					pushLog( `loop error: ${ ( e && e.message ) || e }` );
-					await new Promise( ( r ) => setTimeout( r, 1000 ) );
-				}
+			} catch ( e ) {
+				pushLog( `loop error: ${ ( e && e.message ) || e }` );
+				retryDelay = POLL_DELAY_BASE;
+				await new Promise( ( r ) => setTimeout( r, 1000 ) );
+			}
 			}
 			pushLog( 'polling loop stopped' );
 		};
