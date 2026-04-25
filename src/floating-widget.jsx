@@ -572,7 +572,11 @@ function StartModal( {
 						),
 						issue.steps && h( 'ol', { style: { margin: '4px 0 0 0', paddingLeft: 18, lineHeight: 1.5 } },
 							issue.steps.map( ( step, si ) =>
-								h( 'li', { key: si, style: { marginBottom: 2 } }, step.text )
+								h( 'li', { key: si, style: { marginBottom: 2 } },
+									step.href
+										? [ step.text, h( 'a', { key: 'link', href: step.href }, step.href ), step.textSuffix || '' ]
+										: step.text
+								)
 							)
 						)
 					)

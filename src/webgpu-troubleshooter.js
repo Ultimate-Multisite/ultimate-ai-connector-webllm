@@ -33,9 +33,16 @@
  * Safe to call in any context (main thread, SharedWorker). Returns issues
  * only when problems are detected.
  *
+ * @param {string} [siteUrl] - The WordPress site origin (e.g. http://mysite.local).
+ *   Defaults to window.location.origin when available. Used in remediation steps
+ *   so the user sees their real URL rather than a generic placeholder.
  * @return {Promise<WebGpuDiagnostic>}
  */
-export async function diagnoseWebGpu() {
+export async function diagnoseWebGpu( siteUrl ) {
+	if ( ! siteUrl && typeof window !== 'undefined' && window.location?.origin ) {
+		siteUrl = window.location.origin;
+	}
+	siteUrl = siteUrl || '';
 	const result = {
 		webgpuApiPresent: false,
 		adapterAvailable: false,
@@ -68,7 +75,7 @@ export async function diagnoseWebGpu() {
 			severity: 'error',
 			title: 'WebGPU API not available',
 			description: 'This browser does not expose the WebGPU API, which is required for in-browser AI inference.',
-			steps: buildNoWebGpuSteps( result.isInsecureContext ),
+			steps: buildNoWebGpuSteps( result.isInsecureContext, siteUrl ),
 		} );
 		return result;
 	}
@@ -145,7 +152,7 @@ export async function diagnoseWebGpu() {
 			severity: 'warning',
 			title: 'Site served over HTTP',
 			description: 'This WordPress site is not using HTTPS. Some browsers restrict WebGPU features on insecure origins. If you experience issues, either enable HTTPS or add this origin to Chrome\'s insecure-origins allowlist.',
-			steps: buildInsecureContextSteps(),
+			steps: buildInsecureContextSteps( siteUrl ),
 		} );
 	}
 
@@ -174,7 +181,7 @@ export function diagnoseWebLlmError( error ) {
 			severity: 'error',
 			title: 'WebGPU not available',
 			description: 'The AI engine requires WebGPU but it is not available in this browser.',
-			steps: buildNoWebGpuSteps( false ),
+			steps: buildNoWebGpuSteps( false, siteUrl ),
 		};
 	}
 
@@ -230,9 +237,10 @@ export function diagnoseWebLlmError( error ) {
 
 /**
  * @param {boolean} isInsecureContext
+ * @param {string}  [siteUrl] - The WordPress site origin, shown in the remediation step.
  * @return {Array<Object>}
  */
-function buildNoWebGpuSteps( isInsecureContext ) {
+function buildNoWebGpuSteps( isInsecureContext, siteUrl ) {
 	const steps = [
 		{
 			text: 'Use a supported browser: Chrome 113+ or Edge 113+ on desktop. Safari and Firefox have limited or no WebGPU support.',
@@ -241,10 +249,13 @@ function buildNoWebGpuSteps( isInsecureContext ) {
 	];
 
 	if ( isInsecureContext ) {
+		const urlExample = siteUrl || 'http://mysite.local';
 		steps.push( {
-			text: 'Your site is served over HTTP. WebGPU requires a secure context. Either set up HTTPS, or in Chrome/Edge go to chrome://flags/#unsafely-treat-insecure-origin-as-secure and add your site\'s URL (e.g. http://mysite.local).',
+			text: 'Your site is served over HTTP. WebGPU requires a secure context. Either set up HTTPS, or in Chrome/Edge open ',
+			textSuffix: ' and add your site\'s URL (' + urlExample + ') to the list.',
 			type: 'chrome-flag',
 			flag: '#unsafely-treat-insecure-origin-as-secure',
+			href: 'chrome://flags/#unsafely-treat-insecure-origin-as-secure',
 		} );
 	}
 
@@ -343,18 +354,22 @@ function buildSoftwareRenderingSteps() {
 }
 
 /**
+ * @param {string} [siteUrl] - The WordPress site origin, shown in the remediation step.
  * @return {Array<Object>}
  */
-function buildInsecureContextSteps() {
+function buildInsecureContextSteps( siteUrl ) {
+	const urlExample = siteUrl || 'http://192.168.1.100';
 	return [
 		{
 			text: 'Recommended: Set up HTTPS for your WordPress site (e.g. via a reverse proxy or local certificate).',
 			type: 'action',
 		},
 		{
-			text: 'Quick workaround: In Chrome/Edge, go to chrome://flags/#unsafely-treat-insecure-origin-as-secure and add your site URL (e.g. http://192.168.1.100).',
+			text: 'Quick workaround: In Chrome/Edge, open ',
+			textSuffix: ' and add your site URL (' + urlExample + ') to the list.',
 			type: 'chrome-flag',
 			flag: '#unsafely-treat-insecure-origin-as-secure',
+			href: 'chrome://flags/#unsafely-treat-insecure-origin-as-secure',
 		},
 		{
 			text: 'After changing the flag, relaunch the browser.',
@@ -392,7 +407,10 @@ export function formatIssuesPlainText( diag ) {
 	return diag.issues.map( ( issue ) => {
 		let text = issue.title + ': ' + issue.description + '\n';
 		if ( issue.steps ) {
-			text += issue.steps.map( ( s, i ) => '  ' + ( i + 1 ) + '. ' + s.text ).join( '\n' );
+			text += issue.steps.map( ( s, i ) => {
+				const stepText = s.text + ( s.href ? s.href : '' ) + ( s.textSuffix || '' );
+				return '  ' + ( i + 1 ) + '. ' + stepText;
+			} ).join( '\n' );
 		}
 		return text;
 	} ).join( '\n\n' );
