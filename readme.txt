@@ -1,7 +1,7 @@
 === Ultimate AI Connector for WebLLM (Browser GPU) ===
 Contributors: ultimatemultisite
 Tags: ai, webllm, webgpu, llm, on-device
-Requires at least: 7.0
+Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
 Stable tag: 1.2.0
@@ -12,7 +12,7 @@ Run LLM inference entirely in the user's browser via WebGPU + WebLLM. Routes thr
 
 == Description ==
 
-This plugin registers a `WebLLM (Browser GPU)` provider with the WordPress 7.0 AI Client. Inference runs **entirely in your browser** using [WebLLM](https://github.com/mlc-ai/web-llm) on WebGPU — no API keys, no data leaving the device.
+This plugin registers a `WebLLM (Browser GPU)` provider with the WordPress AI Client. Inference runs **entirely in your browser** using [WebLLM](https://github.com/mlc-ai/web-llm) on WebGPU — no API keys, no data leaving the device.
 
 In Chrome 124+ and Edge 124+, a SharedWorker loads the model automatically when you open any wp-admin page — no dedicated tab required. The model stays loaded as you navigate between admin pages. On older browsers, a dedicated Tools → WebLLM Worker tab acts as the fallback. Because the WordPress site itself acts as a broker, any logged-in device on the same install — phone, tablet, second laptop — can submit a request and have it served by your desktop GPU.
 
