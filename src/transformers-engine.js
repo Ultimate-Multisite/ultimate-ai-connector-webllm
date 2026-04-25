@@ -48,19 +48,56 @@ const CURATED_MODELS = [
 ];
 
 /**
- * Build a progress_callback for Transformers.js that maps to our onProgress contract.
+ * Build an aggregate progress_callback for Transformers.js.
  *
- * @param {Function|undefined} onProgress
+ * Transformers.js fires per-file progress events (each file 0→100% independently).
+ * This aggregator tracks loaded/total bytes across ALL files simultaneously and
+ * reports a single 0–1 fraction reflecting overall download progress — matching
+ * the smooth progress bar seen in the official HuggingFace demo spaces.
+ *
+ * Pattern sourced from: webml-community/Gemma-4-WebGPU
+ *   files_loading[file] = { loaded, total }
+ *   aggregate = sum(loaded) / sum(total)
+ *
+ * @param {Function|undefined} onProgress  Called with { progress: 0–1, text: string }.
  * @return {Function|undefined}
  */
 function makeProgressCallback( onProgress ) {
 	if ( typeof onProgress !== 'function' ) {
 		return undefined;
 	}
+
+	// Keyed by filename; each entry tracks { loaded, total } in bytes.
+	const fileBytes = Object.create( null );
+
 	return ( p ) => {
-		const pct = typeof p.progress === 'number' ? p.progress / 100 : null;
-		const text = p.file ? `Downloading ${ p.file }…` : ( p.status || 'Loading…' );
-		onProgress( { progress: pct, text } );
+		if ( p.status === 'progress' && p.file && typeof p.loaded === 'number' && typeof p.total === 'number' && p.total > 0 ) {
+			// Update byte counts for this file.
+			fileBytes[ p.file ] = { loaded: p.loaded, total: p.total };
+
+			// Compute aggregate across all known files.
+			let totalLoaded = 0;
+			let totalBytes = 0;
+			for ( const entry of Object.values( fileBytes ) ) {
+				totalLoaded += entry.loaded;
+				totalBytes += entry.total;
+			}
+
+			const pct = totalBytes > 0 ? totalLoaded / totalBytes : null;
+			const loadedMB = ( totalLoaded / 1024 / 1024 ).toFixed( 0 );
+			const totalMB = ( totalBytes / 1024 / 1024 ).toFixed( 0 );
+			const text = `Downloading model… ${ loadedMB } / ${ totalMB } MB`;
+			onProgress( { progress: pct, text } );
+		} else if ( p.status === 'done' && p.file ) {
+			// Mark file complete so later total is accurate.
+			if ( fileBytes[ p.file ] ) {
+				fileBytes[ p.file ].loaded = fileBytes[ p.file ].total;
+			}
+		} else if ( p.status === 'ready' ) {
+			onProgress( { progress: 1, text: 'Model ready' } );
+		} else if ( p.status === 'initiate' ) {
+			onProgress( { progress: null, text: `Fetching ${ p.file || 'model' }…` } );
+		}
 	};
 }
 
