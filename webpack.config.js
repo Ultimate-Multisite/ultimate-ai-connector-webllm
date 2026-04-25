@@ -50,7 +50,7 @@ module.exports = {
 		rules: [
 			{
 				test: /\.jsx?$/,
-				exclude: /node_modules\/(?!@mlc-ai)/,
+				exclude: /node_modules\/(?!@mlc-ai|@huggingface)/,
 				use: {
 					loader: require.resolve( 'babel-loader' ),
 					options: {

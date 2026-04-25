@@ -11,6 +11,7 @@
 		"postarchive": "rm -rf $npm_package_name && unzip -q $npm_package_name.zip -d $npm_package_name && rm $npm_package_name.zip && zip -qr $npm_package_name.zip $npm_package_name && rm -rf $npm_package_name"
 	},
 	"dependencies": {
+		"@huggingface/transformers": "^3.6.0",
 		"@mlc-ai/web-llm": "^0.2.79"
 	},
 	"devDependencies": {

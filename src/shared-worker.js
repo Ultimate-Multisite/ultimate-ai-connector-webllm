@@ -16,15 +16,17 @@
 // SharedWorker URL identity (Gotcha #1): keyed by (script URL, name).
 // Do NOT hash the filename — use a stable URL and VERSION for mismatch detection.
 
-import { MLCEngine, prebuiltAppConfig } from '@mlc-ai/web-llm';
+import { detectRuntime, normaliseRequest, RUNTIME_WEBLLM, RUNTIME_TRANSFORMERS } from './engine-adapter';
+import { createWebLlmEngine } from './webllm-engine';
+import { createTransformersEngine } from './transformers-engine';
 
 // ---------------------------------------------------------------------------
 // Module-level state (shared across all connected tabs)
 // ---------------------------------------------------------------------------
 
-const VERSION = 1; // bump on breaking message-schema changes
+const VERSION = 2; // bump: multi-runtime support
 
-/** @type {MLCEngine|null} */
+/** @type {Object|null} Engine adapter instance. */
 let engine = null;
 
 /** @type {'idle'|'loading'|'ready'|'busy'|'error'} */
@@ -227,47 +229,22 @@ async function autoPickModel( list ) {
 }
 
 // ---------------------------------------------------------------------------
-// Engine lifecycle
+// Engine lifecycle (runtime-agnostic via adapter pattern)
 // ---------------------------------------------------------------------------
 
-/**
- * Lazily create the MLCEngine singleton.
- *
- * @return {Promise<MLCEngine>} The shared engine instance.
- */
-async function ensureEngine() {
-	if ( engine ) {
-		return engine;
-	}
-	// HuggingFace now redirects model shards to their xet CDN
-	// (cas-bridge.xethub.hf.co). The browser Cache API's `cache.add()`
-	// rejects redirected cross-origin responses with a NetworkError, so
-	// WebLLM's default Cache-backed loader fails on every shard. Forcing
-	// the IndexedDB-backed cache bypasses Cache.add entirely — weights
-	// are fetched with plain fetch() and stored as blobs in IndexedDB.
-	const appConfig = { ...prebuiltAppConfig, useIndexedDBCache: true };
-	engine = new MLCEngine( {
-		appConfig,
-		initProgressCallback: ( report ) => {
-			setState( 'loading', { progress: report } );
-		},
-	} );
+function ensureEngineForModel( modelId ) {
+	const runtime = detectRuntime( modelId );
+	if ( engine && engine.runtime === runtime ) return engine;
+	if ( engine ) { engine.unload().catch( () => {} ); engine = null; }
+	engine = runtime === RUNTIME_TRANSFORMERS ? createTransformersEngine() : createWebLlmEngine();
 	return engine;
 }
 
-/**
- * Load (or reload) a model by ID.
- *
- * Transitions: idle/ready/error → loading → ready (or error on failure).
- * Starts broker polling once the engine is ready.
- *
- * @param {string} modelId
- */
 async function loadModel( modelId ) {
 	try {
 		setState( 'loading', { progress: null, error: null } );
-		const e = await ensureEngine();
-		await e.reload( modelId );
+		const eng = ensureEngineForModel( modelId );
+		await eng.load( modelId, { onProgress: ( report ) => setState( 'loading', { progress: report } ) } );
 		currentModelId = modelId;
 		setState( 'ready' );
 		startBrokerPolling();
@@ -277,19 +254,9 @@ async function loadModel( modelId ) {
 	}
 }
 
-/**
- * Unload the current model and dispose the engine.
- *
- * Transitions: any → idle.
- */
 async function unloadModel() {
 	stopBrokerPolling();
-	if ( engine ) {
-		try {
-			await engine.unload();
-		} catch ( _ ) {}
-		engine = null;
-	}
+	if ( engine ) { try { await engine.unload(); } catch ( _ ) {} engine = null; }
 	currentModelId = null;
 	setState( 'idle', { progress: null, error: null } );
 }
@@ -431,91 +398,15 @@ function stopIdlePeeking() {
 }
 
 /**
- * Flatten an OpenAI content-parts array to a plain string.
- *
- * WebLLM's non-VLM models reject `[{type:'text', text:'...'}]` payloads —
- * they only accept plain strings. The WP AI SDK always sends parts arrays,
- * so we strip everything back to concatenated text. Mirrors the
- * normalisation in src/worker.jsx so both runtimes handle SDK input the
- * same way.
- *
- * @param {string|Array|Object} c
- * @return {string}
- */
-function flattenContent( c ) {
-	if ( typeof c === 'string' ) {
-		return c;
-	}
-	if ( Array.isArray( c ) ) {
-		return c
-			.map( ( p ) => {
-				if ( typeof p === 'string' ) {
-					return p;
-				}
-				if ( p && typeof p.text === 'string' ) {
-					return p.text;
-				}
-				return '';
-			} )
-			.filter( Boolean )
-			.join( '' );
-	}
-	if ( c && typeof c.text === 'string' ) {
-		return c.text;
-	}
-	return '';
-}
-
-/**
- * Normalise the SDK payload to what WebLLM actually supports.
- *
- * The WP AI Client SDK forwards OpenAI-compatible fields that WebLLM
- * doesn't all accept; strip the unsupported ones, flatten content parts,
- * and force the currently-loaded model id on the request.
- *
- * @param {Object} req Raw request from the broker job.
- * @return {Object}    Normalised payload for engine.chat.completions.create().
- */
-function normaliseRequest( req ) {
-	const messages = Array.isArray( req?.messages )
-		? req.messages.map( ( m ) => ( {
-				role: m.role,
-				content: flattenContent( m.content ),
-		  } ) )
-		: [];
-	return {
-		messages,
-		model: currentModelId || req?.model,
-		stream: false,
-		...( typeof req?.temperature === 'number' && { temperature: req.temperature } ),
-		...( typeof req?.top_p === 'number' && { top_p: req.top_p } ),
-		...( typeof req?.max_tokens === 'number' && { max_tokens: req.max_tokens } ),
-		...( typeof req?.frequency_penalty === 'number' && {
-			frequency_penalty: req.frequency_penalty,
-		} ),
-		...( typeof req?.presence_penalty === 'number' && {
-			presence_penalty: req.presence_penalty,
-		} ),
-	};
-}
-
-/**
  * Execute a single inference job and POST the result back to the broker.
- *
- * Transitions: ready → busy → ready (or error on failure).
- *
- * The result is POSTed **flat** (not wrapped in `{ result }`) so it
- * matches the dedicated-tab worker's format — the broker stores the
- * body verbatim and the SDK expects `id/choices/model/...` at the top
- * level of the response.
  *
  * @param {Object} job Job descriptor from /jobs/next: { id, request }
  */
 async function runJob( job ) {
 	setState( 'busy' );
 	try {
-		const payload = normaliseRequest( job.request || job );
-		const result  = await engine.chat.completions.create( payload );
+		const payload = normaliseRequest( job.request || job, currentModelId );
+		const result  = await engine.chat( payload );
 		// eslint-disable-next-line no-undef
 		await fetch( `/wp-json/webllm/v1/jobs/${ job.id }/result`, {
 			method: 'POST',
@@ -579,15 +470,18 @@ async function handlePortMessage( port, event ) {
 	};
 
 	switch ( msg.type ) {
-		case 'handshake':
-			// Client connects and identifies itself. Reply with version + state.
-			reply( {
-				type: 'handshake',
-				version: VERSION,
-				state: snapshot(),
-				models: prebuiltAppConfig?.model_list || [],
-			} );
+		case 'handshake': {
+			let allModels = [];
+			try {
+				const [ wM, tM ] = await Promise.all( [
+					createWebLlmEngine().getModelList().catch( () => [] ),
+					createTransformersEngine().getModelList().catch( () => [] ),
+				] );
+				allModels = [ ...tM, ...wM ];
+			} catch ( _ ) {}
+			reply( { type: 'handshake', version: VERSION, state: snapshot(), models: allModels } );
 			break;
+		}
 
 		case 'getStatus':
 			reply( { type: 'status', ...snapshot() } );
@@ -600,11 +494,11 @@ async function handlePortMessage( port, event ) {
 			break;
 
 		case 'loadModel': {
-			// Load a specific model by ID, or auto-pick if none given.
 			let modelId = msg.modelId || null;
 			if ( ! modelId ) {
-				const list = prebuiltAppConfig?.model_list || [];
-				modelId = await autoPickModel( list );
+				let combinedList = [];
+				try { combinedList = await createWebLlmEngine().getModelList().catch( () => [] ); } catch ( _ ) {}
+				modelId = await autoPickModel( combinedList );
 			}
 			if ( ! modelId ) {
 				reply( { type: 'error', error: 'No model available to load' } );
@@ -638,9 +532,8 @@ async function handlePortMessage( port, event ) {
 			}
 			setState( 'busy' );
 			try {
-				const result = await engine.chat.completions.create(
-					msg.request
-				);
+				const chatReq = normaliseRequest( msg.request, currentModelId );
+				const result = await engine.chat( chatReq );
 				reply( { type: 'chatResult', result } );
 			} catch ( err ) {
 				reply( {
