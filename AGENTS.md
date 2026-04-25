@@ -7,7 +7,7 @@ No third-party API. No API keys. No per-token cost. Model weights live in the br
 ## Project Overview
 
 - **Type**: WordPress plugin (`wordpress-plugin` composer package type)
-- **Minimum WordPress**: 7.0 (uses the bundled AI Client SDK)
+- **Minimum WordPress**: 6.9 (uses the bundled AI Client SDK)
 - **Minimum PHP**: 7.4 (composer platform pinned to 8.2.0)
 - **Licence**: GPL-2.0-or-later
 - **Entry point**: `ultimate-ai-connector-webllm.php`

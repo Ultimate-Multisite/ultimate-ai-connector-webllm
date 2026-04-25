@@ -2,7 +2,7 @@ const defaultConfig = require( '@wordpress/scripts/config/webpack.config' );
 const path = require( 'path' );
 
 // Three entries:
-//   connector.js      — ES module loaded by WP 7.0 Connectors page (Script Modules API).
+//   connector.js      — ES module loaded by WP 6.9 Connectors page (Script Modules API).
 //   worker.js         — classic script loaded on the Tools → WebLLM Worker admin page,
 //                       bundles @mlc-ai/web-llm so it ships as one self-contained file.
 //   shared-worker.js  — SharedWorker entry point (p001 Phase 2). Hosts a single

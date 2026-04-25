@@ -1,6 +1,6 @@
 # Ultimate AI Connector for WebLLM (Browser GPU)
 
-A WordPress 7.0+ plugin that adds a **WebLLM** provider to the bundled AI Client SDK. Inference runs **entirely in the user's browser** on WebGPU via [`@mlc-ai/web-llm`](https://github.com/mlc-ai/web-llm) — no API keys, no data leaving the device, no usage fees.
+A WordPress 6.9+ plugin that adds a **WebLLM** provider to the bundled AI Client SDK. Inference runs **entirely in the user's browser** on WebGPU via [`@mlc-ai/web-llm`](https://github.com/mlc-ai/web-llm) — no API keys, no data leaving the device, no usage fees.
 
 A SharedWorker running in the browser acts as the GPU; the WordPress site brokers requests so any logged-in device on the install (a phone, a tablet, a second laptop) can send a prompt and have it served by the desktop GPU.
 
@@ -16,7 +16,7 @@ This is the right answer when:
 
 ## Quick start
 
-1. Install and activate the plugin on WordPress 7.0+.
+1. Install and activate the plugin on WordPress 6.9+.
 2. Visit any wp-admin page. A small floating icon appears in the corner.
 3. The first time you click an AI feature (e.g. the excerpt generator in WordPress/ai), a start modal appears showing the recommended model for your hardware. Click **Start**.
 4. Wait for the model to download (once per browser — cached in IndexedDB after that).
@@ -60,7 +60,7 @@ The WordPress site is the broker. Any device on the install can submit a prompt;
 
 ## Requirements
 
-- **WordPress 7.0+** (uses the bundled AI Client SDK).
+- **WordPress 6.9+** (uses the bundled AI Client SDK).
 - **PHP 7.4+**.
 - A modern desktop browser with **WebGPU** enabled. Chrome 124+ / Edge 124+ for the zero-config SharedWorker runtime. On Linux you may need to enable `chrome://flags/#enable-unsafe-webgpu`, `#enable-vulkan`, and `#ignore-gpu-blocklist`.
 - A GPU with **at least ~4 GB of VRAM** for the smallest useful chat models. Bigger models want 8–16 GB. WebLLM will fall back to SwiftShader on machines without a real GPU but inference will be unusably slow.
@@ -77,7 +77,7 @@ npm install
 npm run build
 ```
 
-Symlink or copy the directory into `wp-content/plugins/`, then network-activate (or activate per-site) on a WordPress 7.0+ install.
+Symlink or copy the directory into `wp-content/plugins/`, then network-activate (or activate per-site) on a WordPress 6.9+ install.
 
 ## Use
 

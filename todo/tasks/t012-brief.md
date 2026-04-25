@@ -56,7 +56,7 @@ Replace the "Quick start" section with:
 ```markdown
 ## Quick start
 
-1. Install and activate the plugin on WordPress 7.0+.
+1. Install and activate the plugin on WordPress 6.9+.
 2. Visit any wp-admin page. A small floating icon appears in the corner.
 3. The first time you click an AI feature (e.g. the excerpt generator in WordPress/ai), a start modal appears showing the recommended model for your hardware. Click **Start**.
 4. Wait for the model to download (once per browser — cached in IndexedDB after that).
