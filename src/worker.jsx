@@ -17,15 +17,9 @@
  */
 
 import { diagnoseWebGpu, diagnoseWebLlmError, hasIssues } from './webgpu-troubleshooter';
-
-// Lazy module handle, populated by ensureWebLlmLoaded() on first use.
-let webllm = null;
-async function ensureWebLlmLoaded() {
-	if ( ! webllm ) {
-		webllm = await import( /* webpackChunkName: "mlc-ai-web-llm" */ '@mlc-ai/web-llm' );
-	}
-	return webllm;
-}
+import { detectRuntime, normaliseRequest, RUNTIME_WEBLLM, RUNTIME_TRANSFORMERS } from './engine-adapter';
+import { createWebLlmEngine } from './webllm-engine';
+import { createTransformersEngine } from './transformers-engine';
 
 const { createElement: h, useState, useEffect, useRef, useCallback, render } = wp.element;
 const { Button, SelectControl, Spinner, Notice, Card, CardBody, __experimentalVStack: VStack, __experimentalHStack: HStack, ProgressBar } = wp.components;
@@ -102,6 +96,8 @@ async function autoPickModel( list ) {
 	const unsupported = ( id ) => ! hasShaderF16 && /f16|BF16/i.test( id || '' );
 
 	const familyRank = ( id ) => {
+		if ( /gemma-4-.*-it|gemma-4.*ONNX/i.test( id ) ) return 12;
+		if ( /gemma-3-.*-it|gemma-3.*ONNX/i.test( id ) ) return 11;
 		if ( /^Qwen3-/i.test( id ) )                  return 10;
 		if ( /DeepSeek-R1/i.test( id ) )               return 9;
 		if ( /Ministral.*(?:Instruct|Reasoning)/i.test( id ) ) return 8;
@@ -121,7 +117,7 @@ async function autoPickModel( list ) {
 	// broadly and rely on the embed/reranker/base exclusion to filter
 	// non-chat models.
 	const isChatCapable = ( id ) =>
-		/instruct|chat|-it-|R1-Distill|Hermes|^Qwen3-|Ministral.*(?:Instruct|Reasoning)|zephyr/i.test( id );
+		/instruct|chat|-it[-/]|-it$|R1-Distill|Hermes|^Qwen3-|Ministral.*(?:Instruct|Reasoning)|zephyr|ONNX/i.test( id );
 
 	const candidates = list
 		.map( ( m ) => ( {
@@ -173,24 +169,24 @@ function App() {
 	const [ modelId, setModelId ] = useState( '' );
 	const [ engine, setEngine ] = useState( null );
 
-	// Kick off the dynamic import on mount. Until it resolves the user sees
-	// "Loading WebLLM library…" instead of an empty screen.
+	// Fetch model catalogs from both runtimes on mount.
 	useEffect( () => {
 		let cancelled = false;
-		ensureWebLlmLoaded()
-			.then( ( mod ) => {
+		( async () => {
+			try {
+				const [ wModels, tModels ] = await Promise.all( [
+					createWebLlmEngine().getModelList().catch( () => [] ),
+					createTransformersEngine().getModelList().catch( () => [] ),
+				] );
 				if ( cancelled ) return;
-				const list = ( mod.prebuiltAppConfig && Array.isArray( mod.prebuiltAppConfig.model_list ) )
-					? mod.prebuiltAppConfig.model_list
-					: [];
-				setModelList( list );
+				setModelList( [ ...tModels, ...wModels ] );
 				setLibLoading( false );
-			} )
-			.catch( ( e ) => {
+			} catch ( e ) {
 				if ( cancelled ) return;
 				setLibError( ( e && e.message ) || String( e ) );
 				setLibLoading( false );
-			} );
+			}
+		} )();
 		return () => { cancelled = true; };
 	}, [] );
 	const [ log, setLog ] = useState( [] );
@@ -295,51 +291,26 @@ function App() {
 		setError( null );
 		setStatus( 'loading' );
 		setLoadProgress( 0 );
-		setLoadText( __( 'Initializing…', 'ultimate-ai-connector-webllm' ) );
+		const runtime = detectRuntime( modelId );
+		setLoadText( runtime === RUNTIME_TRANSFORMERS
+			? __( 'Loading Transformers.js model…', 'ultimate-ai-connector-webllm' )
+			: __( 'Initializing…', 'ultimate-ai-connector-webllm' )
+		);
 		try {
-			const mod = await ensureWebLlmLoaded();
-
-			// Override the model's baked-in context_window_size. MLC's
-			// prebuilt configs cap most chat models at 4096 tokens to keep
-			// KV cache memory low; we expose a setting so users with bigger
-			// GPUs can fit longer system prompts (e.g. AI agent tool defs).
-			// Each doubling of context roughly doubles VRAM for the KV cache.
-			const appConfig = JSON.parse( JSON.stringify( mod.prebuiltAppConfig ) );
-			const entry     = appConfig.model_list.find( ( m ) => ( m.model_id || m.id ) === modelId );
-			// model_type: 0 = LLM (default), 1 = embedding, 2 = VLM.
-			// Embedding models reject `context_window_size !== prefill_chunk_size`
-			// ("Embedding currently does not support chunking"), so we must not
-			// apply the LLM-oriented context override to them. We also heuristically
-			// skip any model whose id contains 'embed' in case `model_type` is
-			// missing from the prebuilt entry.
-			const isEmbedding = entry && (
-				entry.model_type === 1 ||
-				/embed/i.test( entry.model_id || entry.id || '' )
-			);
-			if ( entry && ! isEmbedding ) {
-				entry.overrides = {
-					...( entry.overrides || {} ),
-					context_window_size: CFG.contextWindow,
-				};
-				pushLog( `context_window_size override → ${ CFG.contextWindow }` );
-			} else if ( isEmbedding ) {
-				pushLog( `skipping context_window override (embedding model)` );
-			}
-			// Force IndexedDB cache: HuggingFace now redirects shards to the
-			// xet CDN, and `Cache.add()` rejects redirected cross-origin
-			// responses. IndexedDB-backed caching uses plain fetch() and
-			// works with the redirect.
-			appConfig.useIndexedDBCache = true;
-
-			const eng = await mod.CreateMLCEngine( modelId, {
-				appConfig,
-				initProgressCallback: ( p ) => {
+			const eng = runtime === RUNTIME_TRANSFORMERS
+				? createTransformersEngine()
+				: createWebLlmEngine();
+			pushLog( `loading ${ modelId } via ${ runtime }` );
+			await eng.load( modelId, {
+				onProgress: ( p ) => {
 					setLoadProgress( typeof p.progress === 'number' ? Math.round( p.progress * 100 ) : null );
 					setLoadText( p.text || '' );
 				},
+				contextWindow: CFG.contextWindow,
 			} );
 			setEngine( eng );
 			setStatus( 'ready' );
+			pushLog( `${ modelId } loaded via ${ runtime }` );
 			// Persist this model as the user's "last successful" choice so
 			// next time we skip the heuristic entirely.
 			try {
@@ -362,7 +333,7 @@ function App() {
 	const unloadModel = useCallback( async () => {
 		stopRef.current = true;
 		try {
-			if ( engine && typeof engine.unload === 'function' ) {
+			if ( engine ) {
 				await engine.unload();
 			}
 		} catch ( e ) {}
@@ -422,57 +393,14 @@ function App() {
 						continue;
 					}
 
-					// Normalize the SDK payload to what WebLLM actually supports.
-					// The AI SDK forwards OpenAI-compatible fields that WebLLM
-					// doesn't all accept — strip the unsupported ones and force
-					// the active model id. `stream: false` is required for the
-					// non-streaming `completions.create` path.
-					//
-					// Critical: WebLLM non-VLM models reject content-parts
-					// arrays (`[{type:"text", text:"..."}]`) — they only take
-					// plain strings. The WP AI SDK always sends parts arrays,
-					// so we flatten any text parts down to a single string and
-					// drop everything else (images, etc.).
-					const flattenContent = ( c ) => {
-						if ( typeof c === 'string' ) return c;
-						if ( Array.isArray( c ) ) {
-							return c
-								.map( ( p ) => {
-									if ( typeof p === 'string' ) return p;
-									if ( p && typeof p.text === 'string' ) return p.text;
-									return '';
-								} )
-								.filter( Boolean )
-								.join( '' );
-						}
-						if ( c && typeof c.text === 'string' ) return c.text;
-						return '';
-					};
-
 					const raw     = job.payload || {};
-					const payload = {
-						model: modelId,
-						messages: Array.isArray( raw.messages )
-							? raw.messages.map( ( m ) => ( {
-								role: m.role || 'user',
-								content: flattenContent( m.content ),
-							} ) )
-							: [],
-						stream: false,
-					};
-					if ( typeof raw.temperature === 'number' ) payload.temperature = raw.temperature;
-					if ( typeof raw.top_p === 'number' )       payload.top_p = raw.top_p;
-					if ( typeof raw.max_tokens === 'number' )  payload.max_tokens = raw.max_tokens;
-					if ( typeof raw.frequency_penalty === 'number' ) payload.frequency_penalty = raw.frequency_penalty;
-					if ( typeof raw.presence_penalty === 'number' )  payload.presence_penalty = raw.presence_penalty;
-					if ( Array.isArray( raw.stop ) ) payload.stop = raw.stop;
-
+					const payload = normaliseRequest( raw, modelId );
 					pushLog( `claimed job ${ job.id.slice( 0, 8 ) } (${ payload.messages.length } msgs)` );
 
 					let result;
 					const t0 = Date.now();
 					try {
-						const completion = await engine.chat.completions.create( payload );
+						const completion = await engine.chat( payload );
 						result = completion;
 						pushLog( `inference ok in ${ Math.round( ( Date.now() - t0 ) / 1000 ) }s` );
 					} catch ( e ) {
@@ -517,10 +445,12 @@ function App() {
 		return ! /f16|BF16/i.test( id );
 	} );
 
-	const modelOptions = visibleModels.map( ( m ) => ( {
-		label: ( m.model_id || m.id ) + ( m.vram_required_MB ? ` (~${ Math.round( m.vram_required_MB ) } MB)` : '' ),
-		value: m.model_id || m.id,
-	} ) );
+	const modelOptions = visibleModels.map( ( m ) => {
+		const id = m.model_id || m.id || m.name;
+		const vram = m.vram_required_MB ? ` (~${ Math.round( m.vram_required_MB ) } MB)` : '';
+		const tag = m.runtime === RUNTIME_TRANSFORMERS ? ' [ONNX]' : '';
+		return { label: ( m.name || id ) + vram + tag, value: id };
+	} );
 
 	// Render a collapsible troubleshooting panel when issues are detected.
 	const troubleshootingPanel = hasIssues( gpuDiag ) && h( 'details', {
@@ -565,7 +495,7 @@ function App() {
 			h( CardBody, null,
 				h( HStack, { spacing: 3 },
 					h( Spinner, null ),
-					h( 'span', null, __( 'Loading WebLLM library… (≈5 MB, downloaded once)', 'ultimate-ai-connector-webllm' ) )
+					h( 'span', null, __( 'Loading model catalog…', 'ultimate-ai-connector-webllm' ) )
 				)
 			)
 		);
@@ -596,7 +526,7 @@ function App() {
 					options: modelOptions,
 					onChange: setModelId,
 					disabled: status === 'loading' || status === 'ready',
-					help: __( 'Pulled live from the installed @mlc-ai/web-llm prebuilt list. VRAM hints come from the package metadata.', 'ultimate-ai-connector-webllm' ),
+					help: __( 'Models from WebLLM (MLC) and Transformers.js (ONNX). ONNX models include Gemma and others not yet in WebLLM.', 'ultimate-ai-connector-webllm' ),
 					__nextHasNoMarginBottom: true,
 					__next40pxDefaultSize: true,
 				} ),
