@@ -470,23 +470,27 @@ function App() {
 		gpuDiag.issues.map( ( issue, idx ) =>
 			h( 'div', { key: idx, style: { marginTop: 10 } },
 				h( 'strong', { style: { color: issue.severity === 'error' ? '#cc1818' : '#996800' } }, issue.title ),
-				h( 'p', { style: { margin: '4px 0' } }, issue.description ),
-				issue.steps && h( 'ol', { style: { margin: '6px 0 0 0', paddingLeft: 20 } },
-					issue.steps.map( ( step, si ) =>
-						h( 'li', {
-							key: si,
-							style: {
-								marginBottom: 4,
-								...(
-									step.type === 'chrome-flag'
-										? { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }
-										: {}
-								),
-							},
-						}, step.text )
+			h( 'p', { style: { margin: '4px 0' } }, issue.description ),
+			issue.steps && h( 'ol', { style: { margin: '6px 0 0 0', paddingLeft: 20 } },
+				issue.steps.map( ( step, si ) =>
+					h( 'li', {
+						key: si,
+						style: {
+							marginBottom: 4,
+							...(
+								step.type === 'chrome-flag'
+									? { fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }
+									: {}
+							),
+						},
+					},
+					step.href
+						? [ step.text, h( 'a', { key: 'link', href: step.href }, step.href ), step.textSuffix || '' ]
+						: step.text
 					)
 				)
 			)
+		)
 		)
 	);
 

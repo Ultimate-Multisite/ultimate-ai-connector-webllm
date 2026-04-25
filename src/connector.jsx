@@ -222,7 +222,12 @@ function WebLlmConnectorCard( { label, description, logo } ) {
 							{ issue.steps && (
 								<ol style={ { margin: '4px 0 0 0', paddingLeft: 20 } }>
 									{ issue.steps.map( ( step, si ) => (
-										<li key={ si } style={ { marginBottom: 2 } }>{ step.text }</li>
+									<li key={ si } style={ { marginBottom: 2 } }>
+										{ step.href
+											? <>{ step.text }<a href={ step.href }>{ step.href }</a>{ step.textSuffix || '' }</>
+											: step.text
+										}
+									</li>
 									) ) }
 								</ol>
 							) }
