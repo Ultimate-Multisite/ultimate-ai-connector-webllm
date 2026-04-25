@@ -16,8 +16,13 @@ async function ensureTransformers() {
 }
 
 const CURATED_MODELS = [
-	{ id: 'onnx-community/gemma-3-4b-it-ONNX', name: 'Gemma 3 4B Instruct (ONNX)', vram_required_MB: 3200, dtype: 'q4f16', family: 'gemma' },
-	{ id: 'onnx-community/gemma-3-1b-it-ONNX', name: 'Gemma 3 1B Instruct (ONNX)', vram_required_MB: 1200, dtype: 'q4f16', family: 'gemma' },
+	// Gemma 4 — best local inference + tool-use model as of 2026-04.
+	{ id: 'onnx-community/gemma-4-E4B-it-ONNX', name: 'Gemma 4 E4B Instruct (ONNX)', vram_required_MB: 3500, dtype: 'q4f16', family: 'gemma4' },
+	{ id: 'onnx-community/gemma-4-E2B-it-ONNX', name: 'Gemma 4 E2B Instruct (ONNX)', vram_required_MB: 1800, dtype: 'q4f16', family: 'gemma4' },
+	// Gemma 3
+	{ id: 'onnx-community/gemma-3-4b-it-ONNX', name: 'Gemma 3 4B Instruct (ONNX)', vram_required_MB: 3200, dtype: 'q4f16', family: 'gemma3' },
+	{ id: 'onnx-community/gemma-3-1b-it-ONNX', name: 'Gemma 3 1B Instruct (ONNX)', vram_required_MB: 1200, dtype: 'q4f16', family: 'gemma3' },
+	// Qwen 3
 	{ id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3 0.6B (ONNX)', vram_required_MB: 800, dtype: 'q4', family: 'qwen' },
 ];
 
