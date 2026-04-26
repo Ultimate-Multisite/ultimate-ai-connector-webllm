@@ -153,9 +153,12 @@ export function createTransformersEngine() {
 
 			const messages = request.messages || [];
 			const maxTokens = request.max_tokens || 1024;
-			// Gemma 4 recommended defaults: temp=1.0, top_p=0.95.
-			const temperature = typeof request.temperature === 'number' ? request.temperature : 1.0;
-			const topP = typeof request.top_p === 'number' ? request.top_p : 0.95;
+			const isG4 = isGemma4( currentModelId );
+			// Gemma 4 recommended defaults: temp=1.0, top_p=0.95. Other models use standard defaults.
+			const defaultTemp = isG4 ? 1.0 : 0.7;
+			const defaultTopP = isG4 ? 0.95 : 0.9;
+			const temperature = typeof request.temperature === 'number' ? request.temperature : defaultTemp;
+			const topP = typeof request.top_p === 'number' ? request.top_p : defaultTopP;
 			const t0 = Date.now();
 
 			if ( isGemma4( currentModelId ) ) {
