@@ -177,9 +177,18 @@ async function autoPickModel( list ) {
 	const unsupported = ( id ) =>
 		! hasShaderF16 && /f16|BF16/i.test( id || '' );
 
+	// Helper: return true for models intended for chat/instruction use.
+	// WebLLM model IDs contain "instruct" or "chat"; ONNX models from the
+	// Transformers.js engine use a "-it-" (instruction-tuned) suffix instead,
+	// but carry a human-readable name that contains "Instruct" or "chat".
+	const isChatModel = ( id, name ) =>
+		/instruct|chat/i.test( id ) ||
+		/instruct|chat/i.test( name || '' );
+
 	const candidates = list
 		.map( ( m ) => ( {
 			id: m.model_id || m.id,
+			name: m.name || '',
 			vram:
 				typeof m.vram_required_MB === 'number'
 					? m.vram_required_MB
@@ -189,7 +198,7 @@ async function autoPickModel( list ) {
 			( m ) =>
 				m.id &&
 				! /embed|reranker/i.test( m.id ) &&
-				/instruct|chat/i.test( m.id ) &&
+				isChatModel( m.id, m.name ) &&
 				! unsupported( m.id ) &&
 				m.vram <= budgetMB
 		);
@@ -200,6 +209,7 @@ async function autoPickModel( list ) {
 		const anyInstruct = list
 			.map( ( m ) => ( {
 				id: m.model_id || m.id,
+				name: m.name || '',
 				vram:
 					typeof m.vram_required_MB === 'number'
 						? m.vram_required_MB
@@ -209,7 +219,7 @@ async function autoPickModel( list ) {
 				( m ) =>
 					m.id &&
 					! /embed|reranker/i.test( m.id ) &&
-					/instruct|chat/i.test( m.id ) &&
+					isChatModel( m.id, m.name ) &&
 					! unsupported( m.id )
 			)
 			.sort( ( a, b ) => a.vram - b.vram );
@@ -497,7 +507,13 @@ async function handlePortMessage( port, event ) {
 			let modelId = msg.modelId || null;
 			if ( ! modelId ) {
 				let combinedList = [];
-				try { combinedList = await createWebLlmEngine().getModelList().catch( () => [] ); } catch ( _ ) {}
+				try {
+					const [ wM, tM ] = await Promise.all( [
+						createWebLlmEngine().getModelList().catch( () => [] ),
+						createTransformersEngine().getModelList().catch( () => [] ),
+					] );
+					combinedList = [ ...tM, ...wM ];
+				} catch ( _ ) {}
 				modelId = await autoPickModel( combinedList );
 			}
 			if ( ! modelId ) {
