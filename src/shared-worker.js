@@ -118,6 +118,29 @@ function setState( next, extra = {} ) {
 }
 
 // ---------------------------------------------------------------------------
+// Combined model list helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch model descriptors from all available engines and merge them.
+ *
+ * ONNX (Transformers.js) models are prepended so they have positional
+ * priority where `familyRank` ties. Each inner `.catch( () => [] )`
+ * prevents a single failing engine from poisoning the combined list;
+ * `Promise.all` itself therefore never rejects.
+ *
+ * @return {Promise<Array<object>>} Merged list: [ ...tM, ...wM ].
+ */
+async function getCombinedModelList() {
+	const [ wM, tM ] = await Promise.all( [
+		createWebLlmEngine().getModelList().catch( () => [] ),
+		createTransformersEngine().getModelList().catch( () => [] ),
+	] );
+	// ONNX first so it has positional priority where rank ties.
+	return [ ...tM, ...wM ];
+}
+
+// ---------------------------------------------------------------------------
 // Auto-pick model heuristic (lifted from src/worker.jsx)
 // ---------------------------------------------------------------------------
 
@@ -152,6 +175,17 @@ async function autoPickModel( list ) {
 	} catch ( e ) {}
 
 	const familyRank = ( id ) => {
+		// ONNX (Transformers.js) families — ranked above WebLLM families so
+		// curated ONNX builds win the primary sort when both fit the VRAM budget.
+		if ( /gemma-4.*-it-ONNX/i.test( id ) ) {
+			return 9;
+		}
+		if ( /gemma-3.*-it-ONNX/i.test( id ) ) {
+			return 8;
+		}
+		if ( /Qwen3.*ONNX/i.test( id ) ) {
+			return 7;
+		}
 		if ( /Llama-3\.2.*Instruct/i.test( id ) ) {
 			return 6;
 		}
@@ -481,14 +515,7 @@ async function handlePortMessage( port, event ) {
 
 	switch ( msg.type ) {
 		case 'handshake': {
-			let allModels = [];
-			try {
-				const [ wM, tM ] = await Promise.all( [
-					createWebLlmEngine().getModelList().catch( () => [] ),
-					createTransformersEngine().getModelList().catch( () => [] ),
-				] );
-				allModels = [ ...tM, ...wM ];
-			} catch ( _ ) {}
+			const allModels = await getCombinedModelList();
 			reply( { type: 'handshake', version: VERSION, state: snapshot(), models: allModels } );
 			break;
 		}
@@ -506,15 +533,7 @@ async function handlePortMessage( port, event ) {
 		case 'loadModel': {
 			let modelId = msg.modelId || null;
 			if ( ! modelId ) {
-				let combinedList = [];
-				try {
-					const [ wM, tM ] = await Promise.all( [
-						createWebLlmEngine().getModelList().catch( () => [] ),
-						createTransformersEngine().getModelList().catch( () => [] ),
-					] );
-					combinedList = [ ...tM, ...wM ];
-				} catch ( _ ) {}
-				modelId = await autoPickModel( combinedList );
+				modelId = await autoPickModel( await getCombinedModelList() );
 			}
 			if ( ! modelId ) {
 				reply( { type: 'error', error: 'No model available to load' } );

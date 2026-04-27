@@ -44,7 +44,7 @@ const CURATED_MODELS = [
 	{ id: 'onnx-community/gemma-3-4b-it-ONNX', name: 'Gemma 3 4B Instruct (ONNX)', vram_required_MB: 3200, dtype: 'q4f16', family: 'gemma3' },
 	{ id: 'onnx-community/gemma-3-1b-it-ONNX', name: 'Gemma 3 1B Instruct (ONNX)', vram_required_MB: 1200, dtype: 'q4f16', family: 'gemma3' },
 	// Qwen 3
-	{ id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3 0.6B (ONNX)', vram_required_MB: 800, dtype: 'q4', family: 'qwen' },
+	{ id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3 0.6B Chat (ONNX)', vram_required_MB: 800, dtype: 'q4', family: 'qwen' },
 ];
 
 /**
