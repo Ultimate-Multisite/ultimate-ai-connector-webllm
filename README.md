@@ -1,6 +1,6 @@
 # Ultimate AI Connector for WebLLM (Browser GPU)
 
-[![Download Latest Release](https://img.shields.io/github/v/release/Ultimate-Multisite/ultimate-ai-connector-webllm?style=for-the-badge&label=Download+Latest+Release&color=0073aa)](https://github.com/Ultimate-Multisite/ultimate-ai-connector-webllm/releases/latest/download/ultimate-ai-connector-webllm.zip) &nbsp; [All Releases →](https://github.com/Ultimate-Multisite/ultimate-ai-connector-webllm/releases)
+[![Download Plugin Now](https://img.shields.io/github/v/release/Ultimate-Multisite/ultimate-ai-connector-webllm?style=for-the-badge&label=Download+Plugin+Now&color=0073aa)](https://github.com/Ultimate-Multisite/ultimate-ai-connector-webllm/releases/latest/download/ultimate-ai-connector-webllm.zip) &nbsp; Upload the zip to WordPress like any other plugin
 
 A WordPress 6.9+ plugin that adds a **WebLLM** provider to the bundled AI Client SDK. Inference runs **entirely in the user's browser** on WebGPU via [`@mlc-ai/web-llm`](https://github.com/mlc-ai/web-llm) — no API keys, no data leaving the device, no usage fees.
 
