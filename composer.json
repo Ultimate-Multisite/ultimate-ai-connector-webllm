@@ -64,5 +64,10 @@
             ".beads",
             "wp-cli.yml"
         ]
+    },
+    "autoload-dev": {
+        "files": [
+            "vendor/php-stubs/wordpress-stubs/wordpress-stubs.php"
+        ]
     }
 }
