@@ -21,7 +21,7 @@ import { detectRuntime, normaliseRequest, RUNTIME_WEBLLM, RUNTIME_TRANSFORMERS }
 import { createWebLlmEngine } from './webllm-engine';
 import { createTransformersEngine } from './transformers-engine';
 
-const { createElement: h, useState, useEffect, useRef, useCallback, render } = wp.element;
+const { createElement: h, useState, useEffect, useRef, useCallback, createRoot } = wp.element;
 const { Button, SelectControl, Spinner, Notice, Card, CardBody, __experimentalVStack: VStack, __experimentalHStack: HStack, ProgressBar } = wp.components;
 const { __ } = wp.i18n;
 
@@ -589,5 +589,5 @@ function App() {
 
 const mount = document.getElementById( 'webllm-worker-root' );
 if ( mount ) {
-	render( h( App ), mount );
+	createRoot( mount ).render( h( App ) );
 }

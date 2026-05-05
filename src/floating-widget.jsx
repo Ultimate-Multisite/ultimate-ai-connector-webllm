@@ -45,7 +45,7 @@ const {
 	useEffect,
 	useRef,
 	useCallback,
-	render,
+	createRoot,
 } = wp.element;
 const { __ } = wp.i18n;
 
@@ -834,7 +834,7 @@ function injectStyles() {
 	const attach = () => {
 		injectStyles();
 		document.body.appendChild( root );
-		render( h( WidgetRoot ), root );
+		createRoot( root ).render( h( WidgetRoot ) );
 	};
 	if ( document.body ) {
 		attach();
