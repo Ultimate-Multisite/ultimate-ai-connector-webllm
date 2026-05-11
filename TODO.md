@@ -87,13 +87,16 @@ t012,Phase 8 — Docs distignore readme updates,@themarcusquinn,docs/auto-dispat
 
 ## Done
 
-<!--TOON:done[6]{id,desc,owner,tags,est,actual,logged,started,completed,status}:
+- [x] t013 Restore health dashboard after cache naming migration (#52) @superdav42 #ops ~30m risk:low logged:2026-05-11 completed:2026-05-11
+
+<!--TOON:done[7]{id,desc,owner,tags,est,actual,logged,started,completed,status}:
 t005,Hook WebLLM into wpai_preferred_text_models filter,@themarcusquinn,bugfix/auto-dispatch,30m,,2026-04-07,,2026-04-08,done
 t006,Phase 2 — SharedWorker handler + MLCEngine wrapper,@themarcusquinn,feature/auto-dispatch,5h,,2026-04-07,,2026-04-08,done
 t007,Phase 3 — Floating widget UI + state machine,@themarcusquinn,feature/auto-dispatch,7h,,2026-04-07,,2026-04-08,done
 t008,Phase 4 — Bootstrap injector capability detection,@themarcusquinn,feature/auto-dispatch,3h,,2026-04-07,,2026-04-08,done
 t009,Phase 5 — Settings + connector card UI update,@themarcusquinn,feature/auto-dispatch,3h,,2026-04-07,,2026-04-08,done
 t010,Phase 6 — apiFetch middleware integration,@themarcusquinn,feature/auto-dispatch,5h,,2026-04-07,,2026-04-08,done
+t013,Restore health dashboard after cache naming migration (#52),@superdav42,ops,30m,30m,2026-05-11,,2026-05-11,done
 -->
 
 ## Declined
