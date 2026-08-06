@@ -75,8 +75,8 @@ The WordPress site is the broker. Any device on the install can submit a prompt;
 git clone https://github.com/Ultimate-Multisite/ultimate-ai-connector-webllm.git
 cd ultimate-ai-connector-webllm
 composer install --no-dev
-npm install
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 ```
 
 Symlink or copy the directory into `wp-content/plugins/`, then network-activate (or activate per-site) on a WordPress 6.9+ install.
