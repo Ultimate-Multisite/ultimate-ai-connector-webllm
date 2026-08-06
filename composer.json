@@ -55,6 +55,7 @@
             "webpack.config.js",
             "package.json",
             "package-lock.json",
+            "pnpm-lock.yaml",
             "composer.lock",
             "TODO.md",
             "AGENTS.md",

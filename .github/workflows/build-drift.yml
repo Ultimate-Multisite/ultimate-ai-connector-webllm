@@ -18,22 +18,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: 'package.json'
+          cache: 'pnpm'
 
       - name: Install Node dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build -- --no-progress 2>&1 | grep -v "^asset\|^chunk\|^webpack\|^\s*$" || true
+        run: pnpm run build -- --no-progress 2>&1 | grep -v "^asset\|^chunk\|^webpack\|^\s*$" || true
 
       - name: Check for uncommitted changes in build/
         run: |
           if ! git diff --quiet --exit-code -- build/; then
-            echo "::error::build/ is out of sync with src/. Run 'npm run build' locally and commit the result."
+            echo "::error::build/ is out of sync with src/. Run 'pnpm run build' locally and commit the result."
             git diff --stat -- build/
             exit 1
           fi

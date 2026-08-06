@@ -70,14 +70,14 @@ ultimate-ai-connector-webllm/
 ```bash
 composer install --no-dev    # Install PHP dependencies (no tests)
 composer install             # Install PHP dependencies with PHPUnit
-npm install                  # Install Node dependencies (@mlc-ai/web-llm + wp-scripts)
-npm run build                # wp-scripts build → build/ (then archive)
-npm run start                # wp-scripts dev mode (watch + rebuild)
-npm run archive              # composer archive → ultimate-ai-connector-webllm.zip
+pnpm install --frozen-lockfile # Install Node dependencies (@mlc-ai/web-llm + wp-scripts)
+pnpm run build               # wp-scripts build → build/ (then archive)
+pnpm run start               # wp-scripts dev mode (watch + rebuild)
+pnpm run archive             # composer archive → ultimate-ai-connector-webllm.zip
 composer test                # Run PHPUnit
 ```
 
-`npm run build` automatically triggers `postbuild` → `archive` → `postarchive` which produces a clean distributable zip in the repo root.
+`pnpm run build` automatically triggers `postbuild` → `archive` → `postarchive` which produces a clean distributable zip in the repo root.
 
 ## REST API
 
@@ -115,7 +115,7 @@ The `/jobs/{id}/result` handler reads `$request->get_url_params()['id']` directl
 
 ## Distribution
 
-`.distignore` controls what composer excludes from the release archive. Current excludes: `.git`, `.github`, `.gitignore`, `.distignore`, `.idea`, `.vscode`, `.phpunit.result.cache`, `.DS_Store`, `node_modules`, `src`, `tests`, `phpunit.xml.dist`, `phpcs.xml.dist`, `webpack.config.js`, `package.json`, `package-lock.json`, `composer.lock`, `TODO.md`, `AGENTS.md`, `.agents/`, `.aidevops.json`, `todo/`, `.beads/`, `wp-cli.yml`.
+`.distignore` controls what composer excludes from the release archive. Current excludes: `.git`, `.github`, `.gitignore`, `.distignore`, `.idea`, `.vscode`, `.phpunit.result.cache`, `.DS_Store`, `node_modules`, `src`, `tests`, `phpunit.xml.dist`, `phpcs.xml.dist`, `webpack.config.js`, `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `composer.lock`, `TODO.md`, `AGENTS.md`, `.agents/`, `.aidevops.json`, `todo/`, `.beads/`, `wp-cli.yml`.
 
 The `composer.json → archive.exclude` list must be kept in sync with `.distignore`.
 

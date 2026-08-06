@@ -73,20 +73,25 @@ jobs:
           extensions: mbstring, intl
           coverage: none
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: 'package.json'
+          cache: 'pnpm'
 
       - name: Install PHP dependencies (production)
         run: composer install --no-dev --optimize-autoloader
 
       - name: Install Node dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build plugin (compiles JS + creates ${{ env.PLUGIN_SLUG }}.zip)
-        run: npm run build
+        run: pnpm run build
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
