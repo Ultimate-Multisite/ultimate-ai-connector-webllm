@@ -1,6 +1,6 @@
 {
 	"name": "ultimate-ai-connector-webllm",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"private": true,
 	"license": "GPL-2.0-or-later",
 	"packageManager": "pnpm@10.15.0",

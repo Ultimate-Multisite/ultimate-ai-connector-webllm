@@ -4,7 +4,7 @@ Tags: ai, webllm, webgpu, llm, on-device
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,6 +22,10 @@ In Chrome 124+ and Edge 124+, a SharedWorker loads the model automatically when 
 * WordPress 7.0+ (bundled AI Client SDK).
 
 == Changelog ==
+
+= 1.2.1 =
+Version 1.2.1 - Released on 2026-08-19
+- Improved: WordPress compatibility metadata now reflects testing through WordPress 7.1.
 
 = 1.2.0 =
 Released on 2026-04-09
