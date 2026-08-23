@@ -26,6 +26,106 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+const MAX_REQUEST_BYTES = 1048576;
+
+/**
+ * Validate and normalize an OpenAI-shaped chat request before queueing it.
+ *
+ * @return array<string, mixed>|\WP_Error
+ */
+function validate_chat_payload( \WP_REST_Request $request ) {
+	$content_type = (string) $request->get_header( 'content-type' );
+	if ( '' !== $content_type && false === stripos( $content_type, 'application/json' ) ) {
+		return new \WP_Error(
+			'webllm_invalid_content_type',
+			__( 'Chat requests must use the application/json content type.', 'ultimate-ai-connector-webllm' ),
+			[ 'status' => 415 ]
+		);
+	}
+
+	if ( strlen( $request->get_body() ) > MAX_REQUEST_BYTES ) {
+		return new \WP_Error(
+			'webllm_request_too_large',
+			__( 'The chat request is too large.', 'ultimate-ai-connector-webllm' ),
+			[ 'status' => 413 ]
+		);
+	}
+
+	$payload = $request->get_json_params();
+	if ( ! is_array( $payload ) || empty( $payload['messages'] ) || ! is_array( $payload['messages'] ) || count( $payload['messages'] ) > 256 ) {
+		return new \WP_Error(
+			'webllm_invalid_messages',
+			__( 'The chat request must contain between 1 and 256 messages.', 'ultimate-ai-connector-webllm' ),
+			[ 'status' => 400 ]
+		);
+	}
+
+	$normalized_messages = [];
+	$total_text_length    = 0;
+	$allowed_roles        = [ 'system', 'developer', 'user', 'assistant', 'tool' ];
+	foreach ( $payload['messages'] as $message ) {
+		if ( ! is_array( $message ) || ! isset( $message['role'] ) || ! array_key_exists( 'content', $message ) ) {
+			return new \WP_Error( 'webllm_invalid_message', __( 'Each chat message must contain a role and content.', 'ultimate-ai-connector-webllm' ), [ 'status' => 400 ] );
+		}
+
+		$role = sanitize_key( (string) $message['role'] );
+		if ( ! in_array( $role, $allowed_roles, true ) ) {
+			return new \WP_Error( 'webllm_invalid_role', __( 'A chat message contains an unsupported role.', 'ultimate-ai-connector-webllm' ), [ 'status' => 400 ] );
+		}
+
+		$content = $message['content'];
+		if ( is_string( $content ) ) {
+			$content = wp_check_invalid_utf8( $content );
+		} elseif ( is_array( $content ) ) {
+			$parts = [];
+			foreach ( $content as $part ) {
+				if ( is_string( $part ) ) {
+					$parts[] = wp_check_invalid_utf8( $part );
+				} elseif ( is_array( $part ) && isset( $part['text'] ) && is_string( $part['text'] ) ) {
+					$parts[] = [ 'type' => 'text', 'text' => wp_check_invalid_utf8( $part['text'] ) ];
+				}
+			}
+			$content = $parts;
+		} else {
+			return new \WP_Error( 'webllm_invalid_content', __( 'Chat message content must be text or an array of text parts.', 'ultimate-ai-connector-webllm' ), [ 'status' => 400 ] );
+		}
+
+		$encoded_content = wp_json_encode( $content );
+		if ( false === $encoded_content ) {
+			return new \WP_Error( 'webllm_invalid_content', __( 'Chat message content could not be encoded as JSON.', 'ultimate-ai-connector-webllm' ), [ 'status' => 400 ] );
+		}
+		$total_text_length += strlen( $encoded_content );
+		$normalized_messages[] = [ 'role' => $role, 'content' => $content ];
+	}
+
+	if ( $total_text_length > MAX_REQUEST_BYTES ) {
+		return new \WP_Error( 'webllm_request_too_large', __( 'The chat message content is too large.', 'ultimate-ai-connector-webllm' ), [ 'status' => 413 ] );
+	}
+
+	$normalized = [ 'messages' => $normalized_messages, 'stream' => false ];
+	if ( isset( $payload['model'] ) && is_string( $payload['model'] ) ) {
+		$normalized['model'] = substr( sanitize_text_field( $payload['model'] ), 0, 256 );
+	}
+	foreach ( [ 'temperature', 'top_p', 'frequency_penalty', 'presence_penalty' ] as $numeric_key ) {
+		if ( isset( $payload[ $numeric_key ] ) && is_numeric( $payload[ $numeric_key ] ) ) {
+			$normalized[ $numeric_key ] = (float) $payload[ $numeric_key ];
+		}
+	}
+	if ( isset( $payload['max_tokens'] ) ) {
+		$normalized['max_tokens'] = min( 32768, max( 1, absint( $payload['max_tokens'] ) ) );
+	}
+	if ( isset( $payload['stop'] ) && is_array( $payload['stop'] ) ) {
+		$normalized['stop'] = array_map(
+			static function ( $stop ): string {
+				return substr( wp_check_invalid_utf8( (string) $stop ), 0, 256 );
+			},
+			array_slice( $payload['stop'], 0, 8 )
+		);
+	}
+
+	return $normalized;
+}
+
 /**
  * Registers all REST routes.
  */
@@ -134,7 +234,7 @@ function client_permission_callback(): bool {
 	if ( $secret ) {
 		$auth = '';
 		if ( ! empty( $_SERVER['HTTP_AUTHORIZATION'] ) ) {
-			$auth = (string) $_SERVER['HTTP_AUTHORIZATION'];
+			$auth = sanitize_text_field( wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ) );
 		} elseif ( function_exists( 'getallheaders' ) ) {
 			$headers = getallheaders();
 			if ( is_array( $headers ) ) {
@@ -188,9 +288,9 @@ function rest_chat_completions( \WP_REST_Request $request ) {
 	// still long-polling. Enqueue unconditionally and let `wait_for_result`
 	// do its job — if it times out we return a friendlier message that
 	// points the user at the admin-bar start control.
-	$payload = $request->get_json_params();
-	if ( ! is_array( $payload ) ) {
-		$payload = [];
+	$payload = validate_chat_payload( $request );
+	if ( is_wp_error( $payload ) ) {
+		return $payload;
 	}
 
 	$id      = Job_Queue::enqueue( 'chat', $payload, get_request_timeout() + 60 );
@@ -331,12 +431,15 @@ function rest_jobs_next( \WP_REST_Request $request ) {
  */
 function rest_jobs_result( \WP_REST_Request $request ) {
 	Job_Queue::mark_worker_seen();
+	if ( strlen( $request->get_body() ) > MAX_REQUEST_BYTES ) {
+		return new \WP_Error( 'webllm_result_too_large', __( 'The worker result is too large.', 'ultimate-ai-connector-webllm' ), [ 'status' => 413 ] );
+	}
 	// Read the id from the URL pattern explicitly. `$request->get_param('id')`
 	// would otherwise return the `id` field of the OpenAI completion JSON
 	// body (which WebLLM populates with its own UUID), shadowing the URL
 	// pattern match and routing the result to the wrong job.
 	$url_params = $request->get_url_params();
-	$id         = (string) ( $url_params['id'] ?? '' );
+	$id         = sanitize_text_field( (string) ( $url_params['id'] ?? '' ) );
 	$result     = $request->get_json_params();
 	if ( ! is_array( $result ) ) {
 		$result = [];
@@ -359,7 +462,7 @@ function rest_register_worker( \WP_REST_Request $request ) {
 	// string explicitly clears the active-model transient so the provider
 	// reports "no model" instead of a stale one after an unload.
 	if ( array_key_exists( 'active_model', $body ) ) {
-		Job_Queue::set_active_model( (string) $body['active_model'] );
+		Job_Queue::set_active_model( substr( sanitize_text_field( (string) $body['active_model'] ), 0, 256 ) );
 	}
 
 	// The full prebuilt catalog is only used by the worker-page model picker
@@ -367,17 +470,17 @@ function rest_register_worker( \WP_REST_Request $request ) {
 	// directory (see rest_list_models for the rationale).
 	$models = ( isset( $body['models'] ) && is_array( $body['models'] ) ) ? $body['models'] : [];
 	$normalized = [];
-	foreach ( $models as $m ) {
+	foreach ( array_slice( $models, 0, 512 ) as $m ) {
 		if ( ! is_array( $m ) ) {
 			continue;
 		}
-		$id = $m['id'] ?? $m['model_id'] ?? '';
+		$id = sanitize_text_field( (string) ( $m['id'] ?? $m['model_id'] ?? '' ) );
 		if ( empty( $id ) ) {
 			continue;
 		}
 		$normalized[] = [
-			'id'   => (string) $id,
-			'name' => (string) ( $m['name'] ?? $id ),
+			'id'   => substr( $id, 0, 256 ),
+			'name' => substr( sanitize_text_field( (string) ( $m['name'] ?? $id ) ), 0, 256 ),
 		];
 	}
 	if ( ! empty( $normalized ) ) {

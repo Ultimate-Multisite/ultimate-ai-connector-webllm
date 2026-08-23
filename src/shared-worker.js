@@ -16,15 +16,14 @@
 // SharedWorker URL identity (Gotcha #1): keyed by (script URL, name).
 // Do NOT hash the filename — use a stable URL and VERSION for mismatch detection.
 
-import { detectRuntime, normaliseRequest, RUNTIME_WEBLLM, RUNTIME_TRANSFORMERS } from './engine-adapter';
+import { normaliseRequest } from './engine-adapter';
 import { createWebLlmEngine } from './webllm-engine';
-import { createTransformersEngine } from './transformers-engine';
 
 // ---------------------------------------------------------------------------
 // Module-level state (shared across all connected tabs)
 // ---------------------------------------------------------------------------
 
-const VERSION = 2; // bump: multi-runtime support
+const VERSION = 3; // bump: WordPress.org WebLLM-only distribution
 
 /** @type {Object|null} Engine adapter instance. */
 let engine = null;
@@ -118,26 +117,16 @@ function setState( next, extra = {} ) {
 }
 
 // ---------------------------------------------------------------------------
-// Combined model list helper
+// Model list helper
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch model descriptors from all available engines and merge them.
+ * Fetch model descriptors from the bundled WebLLM runtime.
  *
- * ONNX (Transformers.js) models are prepended so they have positional
- * priority where `familyRank` ties. Each inner `.catch( () => [] )`
- * prevents a single failing engine from poisoning the combined list;
- * `Promise.all` itself therefore never rejects.
- *
- * @return {Promise<Array<object>>} Merged list: [ ...tM, ...wM ].
+ * @return {Promise<Array<object>>} WebLLM model descriptors.
  */
 async function getCombinedModelList() {
-	const [ wM, tM ] = await Promise.all( [
-		createWebLlmEngine().getModelList().catch( () => [] ),
-		createTransformersEngine().getModelList().catch( () => [] ),
-	] );
-	// ONNX first so it has positional priority where rank ties.
-	return [ ...tM, ...wM ];
+	return createWebLlmEngine().getModelList().catch( () => [] );
 }
 
 // ---------------------------------------------------------------------------
@@ -175,17 +164,6 @@ async function autoPickModel( list ) {
 	} catch ( e ) {}
 
 	const familyRank = ( id ) => {
-		// ONNX (Transformers.js) families — ranked above WebLLM families so
-		// curated ONNX builds win the primary sort when both fit the VRAM budget.
-		if ( /gemma-4.*-it-ONNX/i.test( id ) ) {
-			return 9;
-		}
-		if ( /gemma-3.*-it-ONNX/i.test( id ) ) {
-			return 8;
-		}
-		if ( /Qwen3.*ONNX/i.test( id ) ) {
-			return 7;
-		}
 		if ( /Llama-3\.2.*Instruct/i.test( id ) ) {
 			return 6;
 		}
@@ -212,9 +190,6 @@ async function autoPickModel( list ) {
 		! hasShaderF16 && /f16|BF16/i.test( id || '' );
 
 	// Helper: return true for models intended for chat/instruction use.
-	// WebLLM model IDs contain "instruct" or "chat"; ONNX models from the
-	// Transformers.js engine use a "-it-" (instruction-tuned) suffix instead,
-	// but carry a human-readable name that contains "Instruct" or "chat".
 	const isChatModel = ( id, name ) =>
 		/instruct|chat/i.test( id ) ||
 		/instruct|chat/i.test( name || '' );
@@ -273,14 +248,12 @@ async function autoPickModel( list ) {
 }
 
 // ---------------------------------------------------------------------------
-// Engine lifecycle (runtime-agnostic via adapter pattern)
+// Engine lifecycle
 // ---------------------------------------------------------------------------
 
-function ensureEngineForModel( modelId ) {
-	const runtime = detectRuntime( modelId );
-	if ( engine && engine.runtime === runtime ) return engine;
-	if ( engine ) { engine.unload().catch( () => {} ); engine = null; }
-	engine = runtime === RUNTIME_TRANSFORMERS ? createTransformersEngine() : createWebLlmEngine();
+function ensureEngineForModel() {
+	if ( engine ) return engine;
+	engine = createWebLlmEngine();
 	return engine;
 }
 

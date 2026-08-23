@@ -2,13 +2,13 @@
 
 [![Download Plugin Now](https://img.shields.io/github/v/release/Ultimate-Multisite/ultimate-ai-connector-webllm?style=for-the-badge&label=Download+Plugin+Now&color=0073aa)](https://github.com/Ultimate-Multisite/ultimate-ai-connector-webllm/releases/latest/download/ultimate-ai-connector-webllm.zip) &nbsp; Upload the zip to WordPress like any other plugin
 
-A WordPress 6.9+ plugin that adds a **WebLLM** provider to the bundled AI Client SDK. Inference runs **entirely in the user's browser** on WebGPU via [`@mlc-ai/web-llm`](https://github.com/mlc-ai/web-llm) — no API keys, no data leaving the device, no usage fees.
+A WordPress 6.9+ plugin that adds a **WebLLM** provider to the bundled AI Client SDK. Inference runs **entirely in the user's browser** on WebGPU via [`@mlc-ai/web-llm`](https://github.com/mlc-ai/web-llm) — no API keys, no prompts sent to an external AI API, and no usage fees.
 
 A SharedWorker running in the browser acts as the GPU; the WordPress site brokers requests so any logged-in device on the install (a phone, a tablet, a second laptop) can send a prompt and have it served by the desktop GPU.
 
 ## Why
 
-Every other WordPress AI provider sends prompts to a third-party API. This one doesn't. The model weights live in the browser cache, the inference runs on the user's own GPU, and the only network traffic is between the WordPress site and the user's own browser tab.
+Every other WordPress AI provider sends prompts to a third-party API. This one doesn't. The model weights live in the browser cache and inference runs on the user's own GPU. The first model start downloads weights from Hugging Face and compiled model libraries from GitHub; prompts and generated responses remain between the WordPress site and the user's browser.
 
 This is the right answer when:
 
@@ -25,6 +25,13 @@ This is the right answer when:
 5. Done. Every AI feature in WordPress is now served by your browser's GPU.
 
 The model stays loaded as you navigate between admin pages and between posts. Closing the last wp-admin tab frees the GPU memory. Reopening wp-admin reloads the model from cache in a few seconds.
+
+### External model downloads
+
+Starting a model downloads its weights and metadata from [Hugging Face Hub](https://huggingface.co/) and its compiled WebAssembly model library from [GitHub raw content](https://raw.githubusercontent.com/), according to WebLLM's bundled model catalog. These requests disclose ordinary web-request information such as the user's IP address and browser user agent, but do not include prompts or generated responses.
+
+- Hugging Face: [Terms](https://huggingface.co/terms-of-service) and [Privacy Policy](https://huggingface.co/privacy)
+- GitHub: [Terms](https://docs.github.com/site-policy/github-terms/github-terms-of-service) and [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)
 
 ### Browser support
 

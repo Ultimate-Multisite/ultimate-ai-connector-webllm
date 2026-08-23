@@ -6,5 +6,5 @@ parameters:
         - .
     excludePaths:
         - ./vendor
-        - ./tests
+        - ./tests (?)
         - ./node_modules
