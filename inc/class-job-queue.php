@@ -66,9 +66,9 @@ class Job_Queue {
 		// snapshot of this request's $wpdb connection plus WP's option
 		// memoization would freeze the queue. COMMIT first to start a
 		// fresh snapshot, then read the option directly from the DB.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- A fresh transaction is required before the uncached queue read.
 		$wpdb->query( 'COMMIT' );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- WordPress option caching would hide jobs created by another request.
 		$raw = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
@@ -83,7 +83,7 @@ class Job_Queue {
 		while ( ! empty( $queue ) ) {
 			$id   = array_shift( $queue );
 			$opt  = '_transient_' . self::JOB_TRANSIENT_PREFIX . $id;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- The current transient state must bypass the per-request cache.
 			$row  = $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
@@ -146,9 +146,9 @@ class Job_Queue {
 		// before each SELECT so each tick starts a fresh transaction and
 		// sees whatever the worker process committed.
 		while ( microtime( true ) < $deadline ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- A fresh transaction is required before each long-poll read.
 			$wpdb->query( 'COMMIT' );
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Cached transient reads cannot observe another request's result.
 			$row = $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
@@ -233,9 +233,9 @@ class Job_Queue {
 	 */
 	public static function get_pending_count(): int {
 		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- A fresh transaction is required before the uncached queue read.
 		$wpdb->query( 'COMMIT' );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Pending counts must observe jobs created by other requests.
 		$raw = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
@@ -251,7 +251,7 @@ class Job_Queue {
 		$count = 0;
 		foreach ( $queue as $id ) {
 			$opt = '_transient_' . self::JOB_TRANSIENT_PREFIX . $id;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Count the current transient state rather than a cached value.
 			$row = $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",

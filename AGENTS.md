@@ -2,7 +2,7 @@
 
 WordPress plugin that registers a WebLLM provider with the bundled WordPress AI Client SDK. LLM inference runs entirely in the user's browser on WebGPU via `@mlc-ai/web-llm`. The WordPress site is a broker — a SharedWorker (Chrome 124+/Edge 124+) or a dedicated admin tab (fallback) acts as the GPU, and any logged-in device on the install can submit prompts that get served by that worker.
 
-No third-party API. No API keys. No per-token cost. Model weights live in the browser cache.
+No third-party inference API. No API keys. No per-token cost. Model weights are downloaded from the locations in WebLLM's bundled catalog and live in the browser cache; prompts and generated responses are not sent to those hosts.
 
 ## Project Overview
 
@@ -107,7 +107,7 @@ The `/jobs/{id}/result` handler reads `$request->get_url_params()['id']` directl
 ## Code Style & Conventions
 
 - PHP namespace: `UltimateAiConnectorWebLlm` (plus per-subfeature sub-namespaces)
-- Constants prefix: `ULTIMATE_AI_CONNECTOR_WEBLLM_*`
+- Shared constants: namespaced `VERSION` and `FILE`
 - Autoloading: classmap over `inc/`
 - Text domain: `ultimate-ai-connector-webllm`
 - Commits: Conventional Commits
@@ -124,6 +124,7 @@ The `composer.json → archive.exclude` list must be kept in sync with `.distign
 - Single worker tab at a time (no load balancing; most recently-active wins)
 - No streaming (broker buffers full completion; SSE would require a loopback-path upgrade)
 - VLM (vision-language) models not yet supported — worker normalises content-parts arrays to plain strings
+- WordPress.org packages ship only the WebLLM runtime so the submission ZIP stays below the directory's 10 MB upload limit
 - Inference speed on integrated GPUs is single-digit tokens/sec; fine for async tasks, slow for chat
 
 ## Task Tracking

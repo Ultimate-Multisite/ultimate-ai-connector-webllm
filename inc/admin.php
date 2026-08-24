@@ -53,12 +53,12 @@ function enqueue_worker_assets( string $hook ): void {
 		return;
 	}
 
-	$build = plugin_dir_path( ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) . 'build/worker.js';
-	$ver   = file_exists( $build ) ? (string) filemtime( $build ) : ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION;
+	$build = plugin_dir_path( FILE ) . 'build/worker.js';
+	$ver   = file_exists( $build ) ? (string) filemtime( $build ) : VERSION;
 
 	wp_enqueue_script(
 		'webllm-worker',
-		plugins_url( 'build/worker.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
+		plugins_url( 'build/worker.js', FILE ),
 		[ 'wp-element', 'wp-components', 'wp-i18n', 'wp-api-fetch' ],
 		$ver,
 		true
@@ -97,14 +97,14 @@ function enqueue_worker_assets( string $hook ): void {
 function enqueue_connector_module(): void {
 	wp_register_script_module(
 		'ultimate-ai-connector-webllm',
-		plugins_url( 'build/connector.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
+		plugins_url( 'build/connector.js', FILE ),
 		[
 			[
 				'id'     => '@wordpress/connectors',
 				'import' => 'static',
 			],
 		],
-		ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION
+		VERSION
 	);
 	wp_enqueue_script_module( 'ultimate-ai-connector-webllm' );
 }
