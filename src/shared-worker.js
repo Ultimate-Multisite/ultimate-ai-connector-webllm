@@ -52,6 +52,9 @@ let pollingActive = false;
 /** @type {boolean} */
 let idlePeekActive = false;
 
+/** @type {Promise<void>} */
+let lifecycleOperation = Promise.resolve();
+
 /** @type {number} */
 let lastAnnouncedPendingJobs = 0;
 
@@ -590,7 +593,14 @@ self.addEventListener( 'connect', ( event ) => {
 
 	ports.add( port );
 
-	port.onmessage = ( ev ) => handlePortMessage( port, ev );
+	port.onmessage = ( ev ) => {
+		const type = ev.data?.type;
+		if ( type === 'loadModel' || type === 'unloadModel' ) {
+			lifecycleOperation = lifecycleOperation.catch( () => {} ).then( () => handlePortMessage( port, ev ) );
+			return;
+		}
+		handlePortMessage( port, ev );
+	};
 	port.onmessageerror = () => handlePortClose( port );
 
 	// Send initial state snapshot to the newly-connected port so it can

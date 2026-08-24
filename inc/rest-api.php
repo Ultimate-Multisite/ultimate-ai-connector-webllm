@@ -479,8 +479,9 @@ function rest_register_worker( \WP_REST_Request $request ) {
 	// Record which model (if any) the worker currently has loaded. An empty
 	// string explicitly clears the active-model transient so the provider
 	// reports "no model" instead of a stale one after an unload.
-	if ( array_key_exists( 'active_model', $body ) && is_string( $body['active_model'] ) ) {
-		Job_Queue::set_active_model( substr( sanitize_text_field( $body['active_model'] ), 0, 256 ) );
+	if ( array_key_exists( 'active_model', $body ) ) {
+		$active_model = is_string( $body['active_model'] ) ? substr( sanitize_text_field( $body['active_model'] ), 0, 256 ) : '';
+		Job_Queue::set_active_model( $active_model );
 	}
 
 	// The full prebuilt catalog is only used by the worker-page model picker

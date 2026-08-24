@@ -40,8 +40,9 @@ export function createWebLlmEngine() {
 
 		async load( modelId, { onProgress, contextWindow } = {} ) {
 			if ( engine ) {
-				await engine.unload();
+				try { await engine.unload(); } catch ( _ ) {}
 				engine = null;
+				currentModelId = null;
 			}
 			const mod = await ensureWebLlm();
 			const appConfig = JSON.parse( JSON.stringify( mod.prebuiltAppConfig ) );
