@@ -4,7 +4,7 @@
 
 A WordPress 6.9+ plugin that adds a **WebLLM** provider to the bundled AI Client SDK. Inference runs **entirely in the user's browser** on WebGPU via [`@mlc-ai/web-llm`](https://github.com/mlc-ai/web-llm) — no API keys, no prompts sent to an external AI API, and no usage fees.
 
-A SharedWorker running in the browser acts as the GPU; the WordPress site brokers requests so any logged-in device on the install (a phone, a tablet, a second laptop) can send a prompt and have it served by the desktop GPU.
+A SharedWorker running in the browser acts as the GPU; when **Allow remote clients** is enabled, the WordPress site brokers requests so other logged-in devices on the install (a phone, a tablet, a second laptop) can send a prompt and have it served by the desktop GPU.
 
 ## Why
 

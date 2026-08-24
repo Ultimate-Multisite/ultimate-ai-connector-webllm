@@ -39,6 +39,10 @@ export function createWebLlmEngine() {
 		},
 
 		async load( modelId, { onProgress, contextWindow } = {} ) {
+			if ( engine ) {
+				await engine.unload();
+				engine = null;
+			}
 			const mod = await ensureWebLlm();
 			const appConfig = JSON.parse( JSON.stringify( mod.prebuiltAppConfig ) );
 			const entry = appConfig.model_list.find( ( m ) => ( m.model_id || m.id ) === modelId );

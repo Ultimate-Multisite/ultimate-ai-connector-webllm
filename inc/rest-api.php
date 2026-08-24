@@ -106,10 +106,28 @@ function validate_chat_payload( \WP_REST_Request $request ) {
 	if ( isset( $payload['model'] ) && is_string( $payload['model'] ) ) {
 		$normalized['model'] = substr( sanitize_text_field( $payload['model'] ), 0, 256 );
 	}
-	foreach ( [ 'temperature', 'top_p', 'frequency_penalty', 'presence_penalty' ] as $numeric_key ) {
-		if ( isset( $payload[ $numeric_key ] ) && is_numeric( $payload[ $numeric_key ] ) ) {
-			$normalized[ $numeric_key ] = (float) $payload[ $numeric_key ];
+	$numeric_ranges = [
+		'temperature'       => [ 0, null ],
+		'top_p'             => [ 0, 1 ],
+		'frequency_penalty' => [ -2, 2 ],
+		'presence_penalty'  => [ -2, 2 ],
+	];
+	foreach ( $numeric_ranges as $numeric_key => $range ) {
+		if ( ! isset( $payload[ $numeric_key ] ) ) {
+			continue;
 		}
+
+		$value = $payload[ $numeric_key ];
+		if ( ! is_numeric( $value ) || ! is_finite( (float) $value ) ) {
+			return new \WP_Error( 'webllm_invalid_generation_option', __( 'A generation option must be a finite number.', 'ultimate-ai-connector-webllm' ), [ 'status' => 400 ] );
+		}
+
+		$value = (float) $value;
+		if ( $value < $range[0] || ( null !== $range[1] && $value > $range[1] ) || ( 'top_p' === $numeric_key && 0.0 === $value ) ) {
+			return new \WP_Error( 'webllm_invalid_generation_option', __( 'A generation option is outside WebLLM\'s supported range.', 'ultimate-ai-connector-webllm' ), [ 'status' => 400 ] );
+		}
+
+		$normalized[ $numeric_key ] = $value;
 	}
 	if ( isset( $payload['max_tokens'] ) ) {
 		$normalized['max_tokens'] = min( 32768, max( 1, absint( $payload['max_tokens'] ) ) );
@@ -461,8 +479,8 @@ function rest_register_worker( \WP_REST_Request $request ) {
 	// Record which model (if any) the worker currently has loaded. An empty
 	// string explicitly clears the active-model transient so the provider
 	// reports "no model" instead of a stale one after an unload.
-	if ( array_key_exists( 'active_model', $body ) ) {
-		Job_Queue::set_active_model( substr( sanitize_text_field( (string) $body['active_model'] ), 0, 256 ) );
+	if ( array_key_exists( 'active_model', $body ) && is_string( $body['active_model'] ) ) {
+		Job_Queue::set_active_model( substr( sanitize_text_field( $body['active_model'] ), 0, 256 ) );
 	}
 
 	// The full prebuilt catalog is only used by the worker-page model picker
@@ -474,13 +492,21 @@ function rest_register_worker( \WP_REST_Request $request ) {
 		if ( ! is_array( $m ) ) {
 			continue;
 		}
-		$id = sanitize_text_field( (string) ( $m['id'] ?? $m['model_id'] ?? '' ) );
+		$id = $m['id'] ?? $m['model_id'] ?? '';
+		if ( ! is_string( $id ) ) {
+			continue;
+		}
+		$id = sanitize_text_field( $id );
 		if ( empty( $id ) ) {
+			continue;
+		}
+		$name = $m['name'] ?? $id;
+		if ( ! is_string( $name ) ) {
 			continue;
 		}
 		$normalized[] = [
 			'id'   => substr( $id, 0, 256 ),
-			'name' => substr( sanitize_text_field( (string) ( $m['name'] ?? $id ) ), 0, 256 ),
+			'name' => substr( sanitize_text_field( $name ), 0, 256 ),
 		];
 	}
 	if ( ! empty( $normalized ) ) {
