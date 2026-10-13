@@ -6,12 +6,15 @@
 .idea
 .vscode
 .phpunit.result.cache
+.task-counter
 .DS_Store
 node_modules
+vendor
 src
 tests
 phpunit.xml.dist
 phpcs.xml.dist
+phpstan.neon.dist
 webpack.config.js
 package.json
 package-lock.json

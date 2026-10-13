@@ -40,7 +40,7 @@ For AI-assisted development of this repo, use the framework's prompt injection d
 ## WordPress-Specific Conventions
 
 - **Internationalisation**: wrap all user-visible strings in `__()` / `esc_html__()` with the text domain `'ultimate-ai-connector-webllm'`.
-- **Asset registration**: use `wp_register_script` / `wp_enqueue_script` with a version string derived from `ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION` so cache busts fire on every release.
+- **Asset registration**: use `wp_register_script` / `wp_enqueue_script` with the namespaced `VERSION` constant so cache busts fire on every release.
 - **Options**: prefix everything with `webllm_`. Register via `register_setting()` on `admin_init` and `rest_api_init` so the REST options endpoint sees them.
 - **REST**: namespace is `webllm/v1`. Always provide an explicit `permission_callback` — never `__return_true` except on the explicitly public `/models` and `/status` routes.
 - **No direct file access**: every PHP file starts with `if ( ! defined( 'ABSPATH' ) ) { return; }`.

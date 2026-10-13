@@ -1,32 +1,13 @@
 /**
  * Engine adapter — abstract interface for LLM inference runtimes.
  *
- * Both @mlc-ai/web-llm (MLC format) and @huggingface/transformers (ONNX
- * format) implement this contract so the SharedWorker, dedicated-tab
- * worker, and floating widget can swap runtimes without changing their
- * own code.
+ * @mlc-ai/web-llm implements this contract so the SharedWorker, dedicated-tab
+ * worker, and floating widget share request-normalisation code.
  *
  * @package UltimateAiConnectorWebLlm
  */
 
 export const RUNTIME_WEBLLM = 'webllm';
-export const RUNTIME_TRANSFORMERS = 'transformers';
-
-/**
- * Detect which runtime a model ID belongs to.
- *
- * HuggingFace model IDs contain a `/` (e.g. `onnx-community/gemma-4-4b-it-ONNX`).
- * Everything else is a WebLLM MLC-compiled model.
- *
- * @param {string} modelId
- * @return {string} RUNTIME_WEBLLM or RUNTIME_TRANSFORMERS
- */
-export function detectRuntime( modelId ) {
-	if ( typeof modelId === 'string' && modelId.includes( '/' ) ) {
-		return RUNTIME_TRANSFORMERS;
-	}
-	return RUNTIME_WEBLLM;
-}
 
 /**
  * Flatten an OpenAI content-parts array to a plain string.
@@ -51,7 +32,7 @@ export function flattenContent( c ) {
 }
 
 /**
- * Normalise an SDK chat-completion request into the subset both engines accept.
+ * Normalise an SDK chat-completion request into the subset WebLLM accepts.
  *
  * @param {Object} raw       Raw request from the broker job or direct chat RPC.
  * @param {string} modelId   Currently-loaded model id.

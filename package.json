@@ -1,6 +1,6 @@
 {
 	"name": "ultimate-ai-connector-webllm",
-	"version": "1.2.1",
+	"version": "1.2.2",
 	"private": true,
 	"license": "GPL-2.0-or-later",
 	"packageManager": "pnpm@10.15.0",
@@ -19,7 +19,6 @@
 		"postarchive": "rm -rf ultimate-ai-connector-webllm && unzip -q ultimate-ai-connector-webllm.zip -d ultimate-ai-connector-webllm && rm ultimate-ai-connector-webllm.zip && zip -qr ultimate-ai-connector-webllm.zip ultimate-ai-connector-webllm && rm -rf ultimate-ai-connector-webllm"
 	},
 	"dependencies": {
-		"@huggingface/transformers": "^4.2.0",
 		"@mlc-ai/web-llm": "0.2.82"
 	},
 	"devDependencies": {

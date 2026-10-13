@@ -64,9 +64,9 @@ function get_localized_widget_config(): array {
 		// the old worker script across rebuilds and changes to
 		// src/shared-worker.js only take effect after chrome://inspect
 		// terminate-and-reload or a manual service worker reset.
-		'widgetBundleUrl'              => add_query_arg( 'v', ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION, plugins_url( 'build/floating-widget.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) ),
-		'middlewareBundleUrl'          => add_query_arg( 'v', ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION, plugins_url( 'build/apifetch-middleware.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) ),
-		'sharedWorkerUrl'              => add_query_arg( 'v', ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION, plugins_url( 'build/shared-worker.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ) ),
+		'widgetBundleUrl'              => add_query_arg( 'v', VERSION, plugins_url( 'build/floating-widget.js', FILE ) ),
+		'middlewareBundleUrl'          => add_query_arg( 'v', VERSION, plugins_url( 'build/apifetch-middleware.js', FILE ) ),
+		'sharedWorkerUrl'              => add_query_arg( 'v', VERSION, plugins_url( 'build/shared-worker.js', FILE ) ),
 		'defaultModel'                 => (string) get_option( 'webllm_default_model', '' ),
 		'knownModelIds'                => $known_models,
 		'isPreferredForTextGeneration' => $is_preferred,
@@ -112,9 +112,9 @@ function inject_widget_bootstrap(): void {
 	$handle = 'webllm-widget-bootstrap';
 	wp_register_script(
 		$handle,
-		plugins_url( 'build/widget-bootstrap.js', ULTIMATE_AI_CONNECTOR_WEBLLM_FILE ),
+		plugins_url( 'build/widget-bootstrap.js', FILE ),
 		[],
-		ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION,
+		VERSION,
 		true
 	);
 	wp_localize_script( $handle, 'webllmConnector', get_localized_widget_config() );

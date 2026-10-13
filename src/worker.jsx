@@ -17,9 +17,8 @@
  */
 
 import { diagnoseWebGpu, diagnoseWebLlmError, hasIssues } from './webgpu-troubleshooter';
-import { detectRuntime, normaliseRequest, RUNTIME_WEBLLM, RUNTIME_TRANSFORMERS } from './engine-adapter';
+import { normaliseRequest, RUNTIME_WEBLLM } from './engine-adapter';
 import { createWebLlmEngine } from './webllm-engine';
-import { createTransformersEngine } from './transformers-engine';
 
 const { createElement: h, useState, useEffect, useRef, useCallback, createRoot } = wp.element;
 const { Button, SelectControl, Spinner, Notice, Card, CardBody, __experimentalVStack: VStack, __experimentalHStack: HStack, ProgressBar } = wp.components;
@@ -96,8 +95,8 @@ async function autoPickModel( list ) {
 	const unsupported = ( id ) => ! hasShaderF16 && /f16|BF16/i.test( id || '' );
 
 	const familyRank = ( id ) => {
-		if ( /gemma-4-.*-it|gemma-4.*ONNX/i.test( id ) ) return 12;
-		if ( /gemma-3-.*-it|gemma-3.*ONNX/i.test( id ) ) return 11;
+		if ( /gemma-4-.*-it/i.test( id ) )              return 12;
+		if ( /gemma-3-.*-it/i.test( id ) )              return 11;
 		if ( /^Qwen3-/i.test( id ) )                  return 10;
 		if ( /DeepSeek-R1/i.test( id ) )               return 9;
 		if ( /Ministral.*(?:Instruct|Reasoning)/i.test( id ) ) return 8;
@@ -117,7 +116,7 @@ async function autoPickModel( list ) {
 	// broadly and rely on the embed/reranker/base exclusion to filter
 	// non-chat models.
 	const isChatCapable = ( id ) =>
-		/instruct|chat|-it[-/]|-it$|R1-Distill|Hermes|^Qwen3-|Ministral.*(?:Instruct|Reasoning)|zephyr|ONNX/i.test( id );
+		/instruct|chat|-it[-/]|-it$|R1-Distill|Hermes|^Qwen3-|Ministral.*(?:Instruct|Reasoning)|zephyr/i.test( id );
 
 	const candidates = list
 		.map( ( m ) => ( {
@@ -169,17 +168,14 @@ function App() {
 	const [ modelId, setModelId ] = useState( '' );
 	const [ engine, setEngine ] = useState( null );
 
-	// Fetch model catalogs from both runtimes on mount.
+	// Fetch the bundled WebLLM model catalog on mount.
 	useEffect( () => {
 		let cancelled = false;
 		( async () => {
 			try {
-				const [ wModels, tModels ] = await Promise.all( [
-					createWebLlmEngine().getModelList().catch( () => [] ),
-					createTransformersEngine().getModelList().catch( () => [] ),
-				] );
+				const wModels = await createWebLlmEngine().getModelList();
 				if ( cancelled ) return;
-				setModelList( [ ...tModels, ...wModels ] );
+				setModelList( wModels );
 				setLibLoading( false );
 			} catch ( e ) {
 				if ( cancelled ) return;
@@ -291,15 +287,10 @@ function App() {
 		setError( null );
 		setStatus( 'loading' );
 		setLoadProgress( 0 );
-		const runtime = detectRuntime( modelId );
-		setLoadText( runtime === RUNTIME_TRANSFORMERS
-			? __( 'Loading Transformers.js model…', 'ultimate-ai-connector-webllm' )
-			: __( 'Initializing…', 'ultimate-ai-connector-webllm' )
-		);
+		const runtime = RUNTIME_WEBLLM;
+		setLoadText( __( 'Initializing…', 'ultimate-ai-connector-webllm' ) );
 		try {
-			const eng = runtime === RUNTIME_TRANSFORMERS
-				? createTransformersEngine()
-				: createWebLlmEngine();
+			const eng = createWebLlmEngine();
 			pushLog( `loading ${ modelId } via ${ runtime }` );
 			await eng.load( modelId, {
 				onProgress: ( p ) => {
@@ -448,8 +439,7 @@ function App() {
 	const modelOptions = visibleModels.map( ( m ) => {
 		const id = m.model_id || m.id || m.name;
 		const vram = m.vram_required_MB ? ` (~${ Math.round( m.vram_required_MB ) } MB)` : '';
-		const tag = m.runtime === RUNTIME_TRANSFORMERS ? ' [ONNX]' : '';
-		return { label: ( m.name || id ) + vram + tag, value: id };
+		return { label: ( m.name || id ) + vram, value: id };
 	} );
 
 	// Render a collapsible troubleshooting panel when issues are detected.
@@ -530,7 +520,7 @@ function App() {
 					options: modelOptions,
 					onChange: setModelId,
 					disabled: status === 'loading' || status === 'ready',
-					help: __( 'Models from WebLLM (MLC) and Transformers.js (ONNX). ONNX models include Gemma and others not yet in WebLLM.', 'ultimate-ai-connector-webllm' ),
+					help: __( 'Models available through the bundled WebLLM runtime.', 'ultimate-ai-connector-webllm' ),
 					__nextHasNoMarginBottom: true,
 					__next40pxDefaultSize: true,
 				} ),
