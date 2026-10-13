@@ -9,6 +9,7 @@
 /composer.lock
 
 # Local-only tooling state
+.aidevops.json
 .beads/
 .agents/loop-state/
 
