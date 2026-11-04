@@ -4,24 +4,47 @@ Tags: ai, webllm, webgpu, llm, on-device
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Run LLM inference entirely in the user's browser via WebGPU + WebLLM. Routes through WordPress so phones, tablets, or other devices can use one desktop GPU.
+Run private, local LLM inference in the browser with WebGPU and WebLLM while WordPress securely brokers requests.
 
 == Description ==
 
-This plugin registers a `WebLLM (Browser GPU)` provider with the WordPress AI Client. Inference runs **entirely in your browser** using [WebLLM](https://github.com/mlc-ai/web-llm) on WebGPU — no API keys, no data leaving the device.
+This plugin registers a `WebLLM (Browser GPU)` provider with the WordPress AI Client. Inference runs **entirely in your browser** using [WebLLM](https://github.com/mlc-ai/web-llm) on WebGPU. Prompts and generated responses are not sent to an external AI API.
 
 In Chrome 124+ and Edge 124+, a SharedWorker loads the model automatically when you open any wp-admin page — no dedicated tab required. The model stays loaded as you navigate between admin pages. On older browsers, a dedicated Tools → WebLLM Worker tab acts as the fallback. Because the WordPress site itself acts as a broker, any logged-in device on the same install — phone, tablet, second laptop — can submit a request and have it served by your desktop GPU.
 
 = Requirements =
 * Modern browser with WebGPU (Chrome / Edge desktop strongly recommended).
 * Dedicated GPU with plenty of VRAM for larger models.
-* WordPress 7.0+ (bundled AI Client SDK).
+* WordPress 6.9+ (bundled AI Client SDK).
+
+== Installation ==
+
+1. Upload the plugin ZIP through Plugins > Add Plugin > Upload Plugin, or install the extracted directory under `wp-content/plugins`.
+2. Activate the plugin.
+3. Open any wp-admin page in a supported desktop browser.
+4. Click the WebLLM status control, choose a model, and start the worker. The first start downloads model files into the browser cache.
+
+== External services ==
+
+The plugin bundles its JavaScript inference runtime. When you explicitly start a model, WebLLM downloads that model's weights and compiled model library directly to your browser cache. WebLLM's bundled model catalog currently points to:
+
+* [Hugging Face Hub](https://huggingface.co/) for model weights and metadata. Your browser connects only when a model is started; prompts and generated responses are not sent. [Terms](https://huggingface.co/terms-of-service) and [Privacy Policy](https://huggingface.co/privacy).
+* [GitHub raw content](https://raw.githubusercontent.com/) for compiled WebAssembly model libraries. Your browser connects only when a model is started; prompts and generated responses are not sent. [Terms](https://docs.github.com/site-policy/github-terms/github-terms-of-service) and [Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+
+These providers receive ordinary web-request information such as the user's IP address and browser user agent. Downloaded files remain in the browser cache until the user clears site data. Individual models may have their own licences and terms, shown by their publishers on the model page.
+
+The human-readable source and build instructions for the compiled JavaScript are maintained at [the public source repository](https://github.com/Ultimate-Multisite/ultimate-ai-connector-webllm).
 
 == Changelog ==
+
+= 1.2.2 =
+* Compliance: reduced the installable package below the WordPress.org submission limit by shipping only the WebLLM runtime.
+* Security: sanitized the loopback authorization header before validating it.
+* Documentation: disclosed model-download services, privacy implications, source code, and build instructions.
 
 = 1.2.1 =
 Version 1.2.1 - Released on 2026-08-19

@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: Ultimate AI Connector for WebLLM (Browser GPU)
- * Description: Registers an AI Client provider that runs LLM inference entirely in the user's browser via WebGPU + WebLLM. A persistent worker tab acts as the GPU; the WordPress site brokers requests so any logged-in device (phone, tablet, second laptop) can use it.
+ * Description: Runs AI Client inference in the browser with WebGPU and WebLLM while WordPress securely brokers requests.
  * Requires at least: 6.9
  * Requires PHP: 7.4
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: Ultimate Multisite Community
  * Author URI: https://ultimatemultisite.com
  * License: GPL-2.0-or-later
@@ -20,9 +20,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	return;
 }
 
-define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_VERSION', '1.2.1' );
-define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_FILE', __FILE__ );
-define( 'ULTIMATE_AI_CONNECTOR_WEBLLM_DIR', __DIR__ );
+const VERSION = '1.2.2';
+const FILE    = __FILE__;
 
 // ---------------------------------------------------------------------------
 // Always-loaded files (no SDK dependency).
